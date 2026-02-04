@@ -44,17 +44,40 @@ fn (mut c C2V) record_decl(node &Node) {
 		c_name = 'AnonStruct_${node.location.line}'
 		c.last_declared_type_name = c_name
 	}
+
+	// First pass: scan for anonymous enums and generate named enum types BEFORE the struct.
+	// V doesn't support inline `enum {}` in struct fields like it does for struct/union.
+	// We need to generate the enum as a separate named type.
+	mut anon_enum_names := map[int]string{} // maps field index to generated enum name
+	mut struct_v_name := c.add_struct_name(mut c.types, c_name)
+	mut pending_enum := &Node(unsafe { nil })
+	for i, field in node.inner {
+		if field.kind == .enum_decl {
+			pending_enum = unsafe { &node.inner[i] }
+			continue
+		}
+		if field.kind == .field_decl && pending_enum != unsafe { nil } {
+			field_type := convert_type(field.ast_type.qualified)
+			if field_type.name.contains('unnamed enum at') {
+				// Generate a named enum for this anonymous enum
+				field_name := filter_name(field.name, false)
+				enum_name := c.generate_named_enum_for_anon(pending_enum, struct_v_name, field_name)
+				anon_enum_names[i] = enum_name
+			}
+			pending_enum = unsafe { nil }
+		}
+	}
+
 	if c_name !in ['struct', 'union'] {
-		v_name := c.add_struct_name(mut c.types, c_name)
 		// prevent duplicate generations:
-		if v_name in c.generated_declarations {
+		if struct_v_name in c.generated_declarations {
 			return
 		}
-		c.generated_declarations[v_name] = true
+		c.generated_declarations[struct_v_name] = true
 		if node.tags.contains('union') {
-			c.genln('union ${v_name} { ')
+			c.genln('union ${struct_v_name} { ')
 		} else {
-			c.genln('struct ${v_name} { ')
+			c.genln('struct ${struct_v_name} { ')
 		}
 	}
 	mut new_struct := Struct{}
@@ -62,7 +85,7 @@ fn (mut c C2V) record_decl(node &Node) {
 	// next child
 	mut anon_struct_definition := ''
 	mut anon_enum_definition := ''
-	for field in node.inner {
+	for i, field in node.inner {
 		c.gen_comment(field)
 		// Handle anon structs and unions (unions appear as RecordDecl with tagUsed='union')
 		if field.kind == .record_decl {
@@ -74,9 +97,8 @@ fn (mut c C2V) record_decl(node &Node) {
 			anon_struct_definition = c.anon_struct_field_type(field, true)
 			continue
 		}
-		// Handle anon enums
+		// Handle anon enums - skip, already processed in first pass
 		if field.kind == .enum_decl {
-			anon_enum_definition = c.anon_enum_field_type(field)
 			continue
 		}
 		// There may be comments, skip them
@@ -92,9 +114,13 @@ fn (mut c C2V) record_decl(node &Node) {
 		if (field_type_name.contains('unnamed struct at') || field_type_name.contains('unnamed union at') || field_type_name.contains('(unnamed at')) && !field_type_name.contains('unnamed enum') {
 			field_type_name = anon_struct_definition
 		}
-		// Handle anon enums
+		// Handle anon enums - use the pre-generated named enum type
 		if field_type_name.contains('unnamed enum at') {
-			field_type_name = anon_enum_definition
+			if i in anon_enum_names {
+				field_type_name = anon_enum_names[i]
+			} else {
+				field_type_name = anon_enum_definition
+			}
 		}
 		if field_type_name.contains('anonymous at') {
 			continue
@@ -173,6 +199,42 @@ fn (mut c C2V) anon_enum_field_type(node &Node) string {
 	}
 	sb.write_string('}')
 	return sb.str()
+}
+
+// Generate a named enum type for an anonymous enum field in a struct.
+// V doesn't support inline `enum {}` syntax in struct fields (unlike struct/union),
+// so we generate a separate named enum type before the struct.
+// Returns the generated enum type name.
+fn (mut c C2V) generate_named_enum_for_anon(node &Node, struct_name string, field_name string) string {
+	// Create enum name from struct name + field name, e.g. "With_anon_enum_Status"
+	enum_name := '${struct_name}_${field_name.capitalize()}'
+
+	// Generate the enum definition
+	c.genln('enum ${enum_name} {')
+	for child in node.inner {
+		if child.kind != .enum_constant_decl {
+			continue
+		}
+		c_name := filter_name(child.name, false)
+		v_name := c_name.camel_to_snake().trim_left('_')
+		mut line := '\t${v_name}'
+		// handle custom enum vals, e.g. `MF_SHOOTABLE = 4`
+		if child.inner.len > 0 {
+			mut const_expr := child.inner[0]
+			if const_expr.kind == .constant_expr && const_expr.inner.len > 0 {
+				// Try to get the literal value
+				literal := const_expr.inner[0]
+				if literal.kind == .integer_literal {
+					line += ' = ${literal.value.to_str()}'
+				}
+			}
+		}
+		c.genln(line)
+	}
+	c.genln('}')
+	c.genln('')
+
+	return enum_name
 }
 
 // Typedef node goes after struct enum, but we need to parse it first, so that "type name { " is
