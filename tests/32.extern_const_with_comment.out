@@ -4,6 +4,7 @@ module main
 //* *This is a doc comment that should not cause
 // *the extern declaration to be treated as initialized.
 //
+
 @[c_extern]
 __global extern_array []&i8
 

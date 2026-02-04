@@ -1196,9 +1196,9 @@ fn (mut c C2V) while_st(mut node Node) {
 
 fn (mut c C2V) for_st(mut node Node) {
 	c.inside_for = true
-	c.gen('for ')
 	// Can be "for (int i = ...)"
 	if node.has_child_of_kind(.decl_stmt) {
+		c.gen('for ')
 		mut decl_stmt := node.try_get_next_child_of_kind(.decl_stmt) or {
 			println(add_place_data_to_error(err))
 			bad_node
@@ -1208,11 +1208,17 @@ fn (mut c C2V) for_st(mut node Node) {
 	}
 	// Or "for (i = ....)"
 	else {
-		expr := node.try_get_next_child() or {
+		mut expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		c.expr(expr)
+		// Handle comma expressions: output all but last before "for", last in init
+		if expr.kindof(.binary_operator) && expr.opcode == ',' {
+			c.for_comma_init(mut expr)
+		} else {
+			c.gen('for ')
+			c.expr(expr)
+		}
 	}
 	c.gen(' ; ')
 	mut expr2 := node.try_get_next_child() or {
@@ -1239,6 +1245,41 @@ fn (mut c C2V) for_st(mut node Node) {
 		bad_node
 	}
 	c.st_block(mut child)
+}
+
+// Handle comma expressions in for loop init: for (a = 0, b = 0; ...)
+// Outputs all but the last expression before "for", and last expression in the init
+fn (mut c C2V) for_comma_init(mut node Node) {
+	mut exprs := []Node{}
+	c.collect_comma_exprs(mut node, mut exprs)
+	// Output all but the last expression before "for"
+	for i := 0; i < exprs.len - 1; i++ {
+		c.expr(exprs[i])
+		c.genln('')
+	}
+	c.gen('for ')
+	// Output the last expression as the for loop init
+	if exprs.len > 0 {
+		c.expr(exprs[exprs.len - 1])
+	}
+}
+
+// Recursively collect all expressions from nested comma operators
+fn (mut c C2V) collect_comma_exprs(mut node Node, mut exprs []Node) {
+	if node.kindof(.binary_operator) && node.opcode == ',' {
+		mut first := node.try_get_next_child() or {
+			println(add_place_data_to_error(err))
+			return
+		}
+		c.collect_comma_exprs(mut first, mut exprs)
+		mut second := node.try_get_next_child() or {
+			println(add_place_data_to_error(err))
+			return
+		}
+		c.collect_comma_exprs(mut second, mut exprs)
+	} else {
+		exprs << node
+	}
 }
 
 fn (mut c C2V) do_st(mut node Node) {
@@ -1843,7 +1884,7 @@ fn (mut c C2V) expr(_node &Node) string {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		if second_expr.kindof(.binary_operator) && second_expr.opcode == '=' {
+		if op == '=' && second_expr.kindof(.binary_operator) && second_expr.opcode == '=' {
 			// handle `a = b = c` => `a = c; b = c;`
 			second_child_expr := second_expr.try_get_next_child() or {
 				println(add_place_data_to_error(err))
@@ -1997,13 +2038,14 @@ fn (mut c C2V) expr(_node &Node) string {
 				bad_node
 			}
 
-			if !expr.kindof(.paren_expr) {
+			needs_parens := !expr.kindof(.paren_expr)
+			if needs_parens {
 				c.gen('(')
-				defer {
-					c.gen(')')
-				}
 			}
 			c.expr(expr)
+			if needs_parens {
+				c.gen(')')
+			}
 		}
 		// sizeof (Type) ?
 		else {
@@ -2112,6 +2154,9 @@ fn (mut c C2V) expr(_node &Node) string {
 	} else if node.kindof(.va_arg_expr) {
 	} else if node.kindof(.compound_stmt) {
 	} else if node.kindof(.offset_of_expr) {
+		// TODO: Properly parse offsetof type and member from AST
+		// For now, output 0 as placeholder - this allows compilation but may not be runtime correct
+		c.gen('0 /*offsetof*/')
 	} else if node.kindof(.array_filler) {
 	} else if node.kindof(.goto_stmt) {
 	} else if node.kindof(.implicit_value_init_expr) {

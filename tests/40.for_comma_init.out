@@ -1,0 +1,12 @@
+@[translated]
+module main
+
+fn test() {
+	i := 0
+	j := 0
+
+	i = 0
+	for j = 0; i < 10; i++ {
+		j++
+	}
+}
