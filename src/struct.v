@@ -135,9 +135,9 @@ fn (mut c C2V) record_decl(node &Node) {
 		new_struct.fields << field_name
 		if field_type.name.ends_with('_s') { // TODO doom _t _s hack, remove
 			n := field_type.name[..field_type.name.len - 2] + '_t'
-			c.genln('\t${field_name} ${n}')
+			c.genln('\t${field_name} ${c.prefix_external_type(n)}')
 		} else {
-			c.genln('\t${field_name} ${field_type_name}')
+			c.genln('\t${field_name} ${c.prefix_external_type(field_type_name)}')
 		}
 	}
 	c.structs[c_name] = new_struct
@@ -272,7 +272,7 @@ fn (mut c C2V) typedef_decl(node &Node) {
 		// Function pointer: int (*)(args)
 		if typ.contains('(*)') {
 			tt := convert_type(typ)
-			typ = tt.name
+			typ = c.prefix_external_type(tt.name)
 		}
 		// Function type without pointer: int (args) - e.g., typedef int fn_name(args)
 		// Note: don't require comma - single-argument functions like "void (void *)" have no comma
@@ -284,7 +284,7 @@ fn (mut c C2V) typedef_decl(node &Node) {
 			args := sargs.split(',')
 			for i, arg in args {
 				t := convert_type(arg.trim_space())
-				s += t.name
+				s += c.prefix_external_type(t.name)
 				if i < args.len - 1 {
 					s += ', '
 				}
@@ -292,7 +292,7 @@ fn (mut c C2V) typedef_decl(node &Node) {
 			if ret_typ.name == 'void' {
 				typ = s + ')'
 			} else {
-				typ = '${s}) ${ret_typ.name}'
+				typ = '${s}) ${c.prefix_external_type(ret_typ.name)}'
 			}
 			typ = typ.replace('(void)', '()')
 		}
@@ -300,7 +300,7 @@ fn (mut c C2V) typedef_decl(node &Node) {
 		else {
 			c_alias_name = c_alias_name.all_after(' ')
 			tt := convert_type(typ)
-			typ = tt.name
+			typ = c.prefix_external_type(tt.name)
 		}
 		if c_alias_name.starts_with('__') {
 			// Skip internal stuff like __builtin_ms_va_list
@@ -319,7 +319,7 @@ fn (mut c C2V) typedef_decl(node &Node) {
 			// TODO handle this better
 			cgen_alias = cgen_alias.capitalize()
 		}
-		c.genln('type ${c_alias_name.capitalize()} = ${cgen_alias}') // typedef alias (SINGLE LINE)')
+		c.genln('type ${c_alias_name.capitalize()} = ${c.prefix_external_type(cgen_alias)}') // typedef alias (SINGLE LINE)')
 		return
 	}
 	if typ.contains('enum ') {

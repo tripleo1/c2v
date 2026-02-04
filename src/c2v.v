@@ -207,6 +207,7 @@ mut:
 	used_global             datatypes.Set[string] // used global in current .c file
 	seen_ids                map[string]&Node
 	generated_declarations  map[string]bool // prevent duplicate generations
+	external_types          map[string]bool // external C types that need declarations
 }
 
 fn empty_toml_doc() toml.Doc {
@@ -310,6 +311,72 @@ fn (mut c C2V) add_struct_name(mut the_map map[string]string, c_string string) s
 	return v_string
 }
 
+// prefix_external_type checks if a type is external (not defined in this translation unit)
+// and prefixes it with 'C.' if so. This handles types from header files.
+fn (mut c C2V) prefix_external_type(type_name string) string {
+	// Handle function types: fn (&Foo, Bar) Baz
+	if type_name.starts_with('fn (') {
+		// Extract parts: args and return type
+		close_paren := type_name.last_index(')') or { return type_name }
+		args_part := type_name['fn ('.len..close_paren]
+		ret_part := type_name[close_paren + 1..].trim_space()
+
+		// Process each argument type
+		args := args_part.split(',')
+		mut new_args := []string{}
+		for arg in args {
+			new_args << c.prefix_external_type(arg.trim_space())
+		}
+
+		// Process return type if present
+		mut result := 'fn (' + new_args.join(', ') + ')'
+		if ret_part.len > 0 {
+			result += ' ' + c.prefix_external_type(ret_part)
+		}
+		return result
+	}
+
+	// Skip built-in V types
+	builtin_v_types := ['int', 'i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64',
+		'bool', 'string', 'rune', 'voidptr', 'usize', 'isize', 'void']
+	// Extract base type name (remove & and [] prefixes)
+	mut base := type_name
+	for base.starts_with('&') || base.starts_with('[') {
+		if base.starts_with('&') {
+			base = base[1..]
+		} else if base.starts_with('[') {
+			// Skip past array notation like [3] or []
+			idx := base.index(']') or { break }
+			base = base[idx + 1..]
+		}
+	}
+	// If it's empty, starts with lowercase, or is a builtin type, return unchanged
+	if base.len == 0 || !base[0].is_capital() || base in builtin_v_types {
+		return type_name
+	}
+	// If it starts with 'C.' already, return unchanged
+	if base.starts_with('C.') {
+		return type_name
+	}
+	// Check if this type is defined in the current translation unit
+	// Look for the lowercase version in types map values (V type names are capitalized)
+	for _, v_name in c.types {
+		if v_name == base {
+			return type_name // Type is defined, no prefix needed
+		}
+	}
+	for _, v_name in c.enums {
+		if v_name == base {
+			return type_name // Type is defined as enum, no prefix needed
+		}
+	}
+	// Type is external - prefix with C.
+	// Track this external type for declaration generation
+	c.external_types[base] = true
+	// Replace the base type with C.base
+	return type_name.replace(base, 'C.' + base)
+}
+
 fn (mut c C2V) save() {
 	vprintln('\n\n')
 	mut s := c.out.str()
@@ -321,6 +388,22 @@ fn (mut c C2V) save() {
 		for label_name, label_id in c.labels {
 			vprintln('"${label_id}" => "${label_name}"')
 			s = s.replace('_GOTO_PLACEHOLDER_' + label_id, label_name)
+		}
+	}
+	// Generate declarations for external C types
+	if c.external_types.len > 0 {
+		mut external_decls := strings.new_builder(200)
+		external_decls.write_string('\n// External C type declarations (from headers)\n')
+		for ext_type, _ in c.external_types {
+			external_decls.write_string('struct C.${ext_type} {}\n')
+		}
+		external_decls.write_string('\n')
+		// Insert after @[translated] and module lines
+		insert_pos := s.index('\n\n') or { 0 }
+		if insert_pos > 0 {
+			s = s[..insert_pos + 1] + external_decls.str() + s[insert_pos + 1..]
+		} else {
+			s = external_decls.str() + s
 		}
 	}
 	c.out_file.write_string(s) or { panic('failed to write to the .v file: ${err}') }
@@ -670,7 +753,7 @@ fn (mut c C2V) fn_decl(mut node Node, gen_types string) {
 	vprintln('END OF FN DECL ast line=${c.line_i}')
 }
 
-fn (c &C2V) fn_params(mut node Node) []string {
+fn (mut c C2V) fn_params(mut node Node) []string {
 	mut str_args := []string{cap: 5}
 	nr_params := node.count_children_of_kind(.parm_var_decl)
 	for i := 0; i < nr_params; i++ {
@@ -690,6 +773,8 @@ fn (c &C2V) fn_params(mut node Node) []string {
 			c_arg_typ_name = fix_restrict_name(c_arg_typ_name)
 			v_arg_typ_name = convert_type(c_arg_typ_name.trim_right('restrict')).name
 		}
+		// Apply external type prefix
+		v_arg_typ_name = c.prefix_external_type(v_arg_typ_name)
 		mut v_param_name := filter_name(c_param_name, false).camel_to_snake().all_after_last('c.')
 		if v_param_name == '' {
 			v_param_name = 'arg${i}'

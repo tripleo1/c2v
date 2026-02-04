@@ -1,0 +1,22 @@
+@[translated]
+module main
+
+// External C type declarations (from headers)
+struct C.External_item {}
+
+// Test that external types (from headers) are properly handled
+// These types are used but not defined in this translation unit
+// Forward declare external struct (definition in header)
+struct My_container {
+	item  &C.External_item
+	count int
+}
+
+fn process_item(item &C.External_item) {
+}
+
+fn main() {
+	c := My_container{}
+	c.count = 0
+	return
+}
