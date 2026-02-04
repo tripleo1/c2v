@@ -164,6 +164,7 @@ mut:
 	inside_switch       int // used to be a bool, a counter to handle switches inside switches
 	inside_switch_enum  bool
 	inside_for          bool // to handle `;;++i`
+	inside_comma_expr   bool // to handle prefix ++/-- in comma expressions
 	inside_array_index  bool // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
 	global_struct_init  string
 	cur_out_line        string
@@ -768,7 +769,11 @@ fn convert_type(typ_ string) Type {
 	typ = typ.replace(' void *', 'voidptr')
 
 	// char*** => ***char
-	mut base := typ.trim_space().replace_each(['struct ', '']) //, 'signed ', ''])
+	mut base := typ.trim_space()
+	// Only remove 'struct ' at the beginning, not in the middle of type names
+	if base.starts_with('struct ') {
+		base = base['struct '.len..]
+	}
 	if base.starts_with('signed ') {
 		// "signed char" == "char", so just ignore "signed "
 		base = base['signed '.len..]
@@ -1806,12 +1811,21 @@ fn (mut c C2V) expr(_node &Node) string {
 	// = + - *
 	else if node.kindof(.binary_operator) {
 		op := node.opcode
+		was_inside_comma := c.inside_comma_expr
+		if op == ',' {
+			c.inside_comma_expr = true
+		}
 		mut first_expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
 		c.expr(first_expr)
-		c.gen(' ${op} ')
+		if op == ',' {
+			// Convert C comma operator to separate statements
+			c.genln('')
+		} else {
+			c.gen(' ${op} ')
+		}
 		mut second_expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node
@@ -1837,6 +1851,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		} else {
 			c.expr(second_expr)
 		}
+		c.inside_comma_expr = was_inside_comma
 		vprintln('done!')
 		if op == '<' || op == '>' || op == '==' {
 			return 'bool'
@@ -1867,7 +1882,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		if op in ['--', '++'] {
 			c.expr(expr)
 			c.gen(' ${op}')
-			if !c.inside_for && !node.is_postfix {
+			if !c.inside_for && !c.inside_comma_expr && !node.is_postfix {
 				// prefix ++
 				// but do not generate `++i` in for loops, it breaks in V for some reason
 				c.gen('$')
@@ -1879,15 +1894,20 @@ fn (mut c C2V) expr(_node &Node) string {
 	}
 	// ()
 	else if node.kindof(.paren_expr) {
-		if !c.skip_parens {
-			c.gen('(')
-		}
 		child := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
+		// Skip parentheses around comma expressions since they become separate statements
+		// Skip parentheses around compound assignments since they are statements in V
+		is_comma_expr := child.kindof(.binary_operator) && child.opcode == ','
+		is_compound_assign := child.kindof(.compound_assign_operator)
+		skip := c.skip_parens || is_comma_expr || is_compound_assign
+		if !skip {
+			c.gen('(')
+		}
 		c.expr(child)
-		if !c.skip_parens {
+		if !skip {
 			c.gen(')')
 		}
 	}
@@ -1985,7 +2005,7 @@ fn (mut c C2V) expr(_node &Node) string {
 			bad_node
 		}
 		c.expr(first_expr)
-		c.gen(' [')
+		c.gen('[')
 
 		second_expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
@@ -1994,7 +2014,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		c.inside_array_index = true
 		c.expr(second_expr)
 		c.inside_array_index = false
-		c.gen('] ')
+		c.gen(']')
 	}
 	// int a[] = {1,2,3};
 	else if node.kindof(.init_list_expr) {
