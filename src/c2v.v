@@ -1600,11 +1600,12 @@ fn (mut c C2V) var_decl(mut decl_stmt Node) {
 
 fn (mut c C2V) global_var_decl(mut var_decl Node) {
 	// if the global has children, that means it's initialized, parse the expression
-	mut is_inited := var_decl.inner.len > 0
-
-	if var_decl.inner.len == 1 {
-		if var_decl.inner[0].kindof(.visibility_attr) {
-			is_inited = false
+	// but only if those children are actual init expressions, not just comments or attributes
+	mut is_inited := false
+	for child in var_decl.inner {
+		if !child.kindof(.visibility_attr) && !child.kindof(.full_comment) {
+			is_inited = true
+			break
 		}
 	}
 
