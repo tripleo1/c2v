@@ -1,0 +1,17 @@
+@[translated]
+module main
+
+enum Color {
+	red
+	green
+	blue
+}
+
+struct Has_enum_ptr {
+	ptr   &Color
+	value int
+}
+
+fn use_enum_ptr(c &Color) {
+	*c = Color.red
+}

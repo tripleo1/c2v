@@ -745,8 +745,16 @@ fn convert_type(typ_ string) Type {
 
 	// enum
 	if typ.starts_with('enum ') {
+		enum_part := typ.substr('enum '.len, typ.len)
+		// Handle pointer to enum: "enum X *" -> "&X"
+		if enum_part.ends_with(' *') {
+			return Type{
+				name:     '&' + enum_part[..enum_part.len - 2].capitalize()
+				is_const: is_const
+			}
+		}
 		return Type{
-			name:     typ.substr('enum '.len, typ.len).capitalize()
+			name:     enum_part.capitalize()
 			is_const: is_const
 		}
 	}
