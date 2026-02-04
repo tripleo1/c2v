@@ -2,6 +2,17 @@ module main
 
 import strings
 
+// resolve_type_alias resolves type alias chains to the underlying type.
+// V doesn't allow type A = B where B is also a type alias.
+fn (mut c C2V) resolve_type_alias(type_name string) string {
+	// If this type is a known alias, resolve to its underlying type
+	if underlying := c.type_aliases[type_name] {
+		// Recursively resolve in case of chains
+		return c.resolve_type_alias(underlying)
+	}
+	return type_name
+}
+
 // |-RecordDecl 0x7fd7c302c560 <a.c:3:1, line:5:1> line:3:8 struct User definition
 fn (mut c C2V) record_decl(node &Node) {
 	vprintln('record_decl("${node.name}")')
@@ -319,7 +330,12 @@ fn (mut c C2V) typedef_decl(node &Node) {
 			// TODO handle this better
 			cgen_alias = cgen_alias.capitalize()
 		}
-		c.genln('type ${c_alias_name.capitalize()} = ${c.prefix_external_type(cgen_alias)}') // typedef alias (SINGLE LINE)')
+		// Resolve type alias chains - V doesn't allow type A = B where B is an alias
+		resolved_alias := c.resolve_type_alias(cgen_alias)
+		prefixed_alias := c.prefix_external_type(resolved_alias)
+		// Store this alias mapping for future resolution
+		c.type_aliases[c_alias_name.capitalize()] = prefixed_alias
+		c.genln('type ${c_alias_name.capitalize()} = ${prefixed_alias}') // typedef alias (SINGLE LINE)')
 		return
 	}
 	if typ.contains('enum ') {

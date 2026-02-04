@@ -155,8 +155,10 @@ mut:
 	out_file            os.File
 	out_line_empty      bool
 	types               map[string]string   // to avoid dups
+	type_aliases        map[string]string   // V type name -> underlying type (for resolving alias chains)
 	enums               map[string]string   // to avoid dups
 	enum_vals           map[string][]string // enum_vals['Color'] = ['green', 'blue'], for converting C globals  to enum values
+	enum_int_vals       map[string]i64      // maps enum constant names to their integer values
 	structs             map[string]Struct   // for correct `Foo{field:..., field2:...}` (implicit value init expr is 0, so un-initied fields are just skipped with 0s)
 	fns                 map[string]string   // to avoid dups
 	extern_fns          map[string]string   // extern C fns
@@ -1113,6 +1115,7 @@ fn (mut c C2V) enum_decl(mut node Node) {
 		c.genln('enum ${v_enum_name} {')
 	}
 	mut vals := c.enum_vals[c_enum_name]
+	mut current_val := i64(0) // track current enum value
 	for i, mut child in node.inner {
 		c.gen_comment(child)
 		c_name := filter_name(child.name, false)
@@ -1136,17 +1139,21 @@ fn (mut c C2V) enum_decl(mut node Node) {
 				bad_node
 			}
 			if const_expr.kind == .constant_expr {
-				c.gen(' = ')
-				c.skip_parens = true
-				c.expr(const_expr.try_get_next_child() or {
-					println(add_place_data_to_error(err))
-					bad_node
-				})
-				c.skip_parens = false
+				// Get the integer value for this enum constant
+				enum_val := c.get_enum_int_value(const_expr, current_val)
+				current_val = enum_val
+				c.gen(' = ${enum_val}')
 			}
 		} else if has_anon_generated {
 			c.gen(' = ${i}')
+			current_val = i64(i)
+		} else {
+			// No explicit value, use auto-increment
+			// current_val is already set from previous iteration
 		}
+		// Store this enum constant's value for future reference
+		c.enum_int_vals[c_name] = current_val
+		current_val++ // next enum value defaults to +1
 		c.genln('')
 	}
 	if c_enum_name != '' {
@@ -1159,6 +1166,42 @@ fn (mut c C2V) enum_decl(mut node Node) {
 	if c_enum_name != '' {
 		c.add_var_func_name(mut c.enums, c_enum_name)
 	}
+}
+
+// get_enum_int_value extracts the integer value from a ConstantExpr node.
+// V requires enum values to be integer literals, but C allows references to other enum constants.
+fn (mut c C2V) get_enum_int_value(const_expr Node, default_val i64) i64 {
+	// Try to get value from the ConstantExpr itself
+	val_str := const_expr.value.to_str()
+	if val_str != '' {
+		return val_str.i64()
+	}
+	// Look at the inner expression
+	if const_expr.inner.len > 0 {
+		inner := const_expr.inner[0]
+		// Integer literal - return its value
+		if inner.kindof(.integer_literal) {
+			return inner.value.to_str().i64()
+		}
+		// Reference to another enum constant - look up its value
+		if inner.kindof(.decl_ref_expr) {
+			ref_name := inner.ref_declaration.name
+			if ref_name in c.enum_int_vals {
+				return c.enum_int_vals[ref_name]
+			}
+		}
+		// Implicit cast - look deeper
+		if inner.kindof(.implicit_cast_expr) && inner.inner.len > 0 {
+			inner2 := inner.inner[0]
+			if inner2.kindof(.decl_ref_expr) {
+				ref_name := inner2.ref_declaration.name
+				if ref_name in c.enum_int_vals {
+					return c.enum_int_vals[ref_name]
+				}
+			}
+		}
+	}
+	return default_val
 }
 
 fn (mut c C2V) statements(mut compound_stmt Node) {
