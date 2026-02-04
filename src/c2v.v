@@ -26,7 +26,8 @@ const builtin_fn_names = ['fopen', 'puts', 'fflush', 'getline', 'printf', 'memse
 	'strcasecmp', 'isspace', 'strncmp', 'malloc', 'close', 'open', 'lseek', 'fseek', 'fgets',
 	'rewind', 'write', 'calloc', 'setenv', 'gets', 'abs', 'sqrt', 'erfl', 'fprintf', 'snprintf',
 	'exit', '__stderrp', 'fwrite', 'scanf', 'sscanf', 'strrchr', 'strchr', 'div', 'free', 'memcmp',
-	'memmove', 'vsnprintf', 'rintf', 'rint', 'bsearch', 'qsort', '__stdinp', '__stdoutp', '__stderrp']
+	'memmove', 'vsnprintf', 'rintf', 'rint', 'bsearch', 'qsort', '__stdinp', '__stdoutp', '__stderrp',
+	'getenv', 'strtoul', 'strtol', 'strtod', 'strtof', '__error', 'errno', 'atol', 'atof', 'atoll']
 
 const c_known_fn_names = ['some_non_existant_c_fn_name']
 

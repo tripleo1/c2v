@@ -180,6 +180,8 @@ fn (mut c C2V) anon_struct_field_type(node &Node, is_union bool) string {
 		if field_type_name.contains('unnamed struct at') || field_type_name.contains('unnamed union at') || field_type_name.contains('(unnamed at') || field_type_name.contains('anonymous at') {
 			field_type_name = nested_anon_def
 		}
+		// Apply external type prefix for types from headers
+		field_type_name = c.prefix_external_type(field_type_name)
 		sb.write_string('${field_name} ${field_type_name}\n')
 	}
 	sb.write_string('}')
