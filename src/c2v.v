@@ -205,6 +205,7 @@ mut:
 	translation_start_ticks i64 // initialised before the loop calling .translate_file()
 	has_cfile               bool
 	returning_bool          bool
+	cur_fn_ret_type         string // current function's return type
 	keep_ast                bool // do not delete ast.json after running
 	last_declared_type_name string
 	can_output_comment      map[int]bool          // to avoid duplicate output comment
@@ -661,6 +662,8 @@ fn (mut c C2V) fn_decl(mut node Node, gen_types string) {
 	} else {
 		typ = convert_type(typ).name
 	}
+	// Track current function's return type for handling bool-to-int returns
+	c.cur_fn_ret_type = typ
 
 	if typ.contains('...') {
 		c.gen('F')
@@ -1293,9 +1296,31 @@ fn (mut c C2V) return_st(mut node Node) {
 				c.returning_bool = true
 			}
 		}
+		// Check if function returns int but expression is a comparison (returns bool in V)
+		// C comparison operators return int (0 or 1), but V returns bool
+		needs_int_cast := c.cur_fn_ret_type == 'int' && c.is_comparison_expr(expr)
+		if needs_int_cast {
+			c.gen('int(')
+		}
 		c.expr(expr)
+		if needs_int_cast {
+			c.gen(')')
+		}
 		c.returning_bool = false
 	}
+}
+
+// is_comparison_expr checks if an expression is a comparison that returns bool
+fn (c &C2V) is_comparison_expr(node Node) bool {
+	// Check direct binary comparison
+	if node.kindof(.binary_operator) {
+		return node.opcode in ['==', '!=', '<', '>', '<=', '>=', '&&', '||']
+	}
+	// Check through implicit cast
+	if node.kindof(.implicit_cast_expr) && node.inner.len > 0 {
+		return c.is_comparison_expr(node.inner[0])
+	}
+	return false
 }
 
 fn (mut c C2V) if_statement(mut node Node) {
