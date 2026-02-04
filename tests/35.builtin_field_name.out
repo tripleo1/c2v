@@ -1,0 +1,7 @@
+@[translated]
+module main
+
+struct Has_builtin_field {
+	read_ fn () voidptr
+	data  voidptr
+}

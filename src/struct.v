@@ -106,7 +106,9 @@ fn (mut c C2V) record_decl(node &Node) {
 			continue
 		}
 		field_type := convert_type(field.ast_type.qualified)
-		field_name := filter_name(field.name, false).uncapitalize()
+		filtered := filter_name(field.name, false)
+		// Don't uncapitalize if it's a C. prefixed name (builtin function)
+		field_name := if filtered.starts_with('C.') { filtered[2..] + '_' } else { filtered.uncapitalize() }
 		mut field_type_name := field_type.name
 
 		// Handle anon structs/unions, the anonymous type has just been defined above, use its definition
