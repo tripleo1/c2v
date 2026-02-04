@@ -1,0 +1,29 @@
+@[translated]
+module main
+
+// Test that C library types are properly translated
+type Report_fn = fn (&i8, voidptr)
+
+fn log_message(fmt &i8, args voidptr) {
+}
+
+fn get_max_value() u64 {
+	return 0
+}
+
+fn get_signed_max() i64 {
+	return 0
+}
+
+@[weak]
+__global global_mutex C.pthread_mutex_t
+
+fn use_mutex(mutex &C.pthread_mutex_t) {
+}
+
+fn main() {
+	u := get_max_value()
+	i := get_signed_max()
+	use_mutex(&global_mutex)
+	return
+}

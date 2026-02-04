@@ -913,6 +913,27 @@ fn convert_type(typ_ string) Type {
 		'FILE' {
 			'C.FILE'
 		}
+		'uintmax_t' {
+			'u64'
+		}
+		'intmax_t' {
+			'i64'
+		}
+		'va_list', '__builtin_va_list', '__gnuc_va_list' {
+			'voidptr'
+		}
+		'pthread_mutex_t' {
+			'C.pthread_mutex_t'
+		}
+		'pthread_t' {
+			'C.pthread_t'
+		}
+		'pthread_cond_t' {
+			'C.pthread_cond_t'
+		}
+		'pthread_key_t' {
+			'C.pthread_key_t'
+		}
 		else {
 			mut capitalized := trim_underscores(base.capitalize())
 			// Check for conflict with V built-in type names (e.g., Option, Result)
