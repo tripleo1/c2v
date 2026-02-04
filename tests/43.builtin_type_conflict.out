@@ -1,0 +1,31 @@
+@[translated]
+module main
+
+// Test that struct names conflicting with V built-in types are renamed
+// V has built-in Option, Result, and Error types
+struct Option_ {
+	value int
+	name  &i8
+}
+
+struct Result_ {
+	code    int
+	message &i8
+}
+
+struct Error_ {
+	errnum int
+	desc   &i8
+}
+
+fn use_option(opt &Option_) {
+	opt.value = 42
+}
+
+fn main() {
+	opt := Option_{}
+	opt.value = 1
+	opt.name = c'test'
+	use_option(&opt)
+	return
+}

@@ -36,6 +36,9 @@ const builtin_type_names = ['ldiv_t', '__float2', '__double2', 'exception', 'dou
 
 const builtin_global_names = ['sys_nerr', 'sys_errlist', 'suboptarg']
 
+// V built-in type names that cannot be used as struct/enum names (case-insensitive after capitalize):
+const v_builtin_type_names = ['Option', 'Result', 'Error']
+
 const tabs = ['', '\t', '\t\t', '\t\t\t', '\t\t\t\t', '\t\t\t\t\t', '\t\t\t\t\t\t', '\t\t\t\t\t\t\t',
 	'\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t\t\t',
 	'\t\t\t\t\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t\t\t\t\t']
@@ -293,6 +296,11 @@ fn (mut c C2V) add_struct_name(mut the_map map[string]string, c_string string) s
 		return v
 	}
 	mut v_string := c_string.trim_left('_').capitalize()
+	// Check for conflict with V built-in type names (e.g., Option, Result)
+	if v_string in v_builtin_type_names {
+		vprintln('${@FN}builtin conflict: ${c_string} => ${v_string}')
+		v_string += '_'
+	}
 	if v_string in the_map.values() {
 		vprintln('${@FN}dup: ${c_string} => ${v_string}')
 		v_string += '_vdup' + c.cnt.str() // renaming the struct's name, avoid duplicate
@@ -906,7 +914,12 @@ fn convert_type(typ_ string) Type {
 			'C.FILE'
 		}
 		else {
-			trim_underscores(base.capitalize())
+			mut capitalized := trim_underscores(base.capitalize())
+			// Check for conflict with V built-in type names (e.g., Option, Result)
+			if capitalized in v_builtin_type_names {
+				capitalized += '_'
+			}
+			capitalized
 		}
 	}
 	mut amps := ''
