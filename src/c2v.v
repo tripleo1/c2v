@@ -724,16 +724,16 @@ fn convert_type(typ_ string) Type {
 	typ = typ.replace(' volatile', '')  // Handle "FILE *volatile" cases
 	typ = typ.replace('volatile', '')   // Handle any remaining volatile
 	typ = typ.replace('std::', '')
-	if typ == 'char **' {
+	if typ.trim_space() == 'char **' {
 		return Type{
 			name: '&&u8'
 		}
 	}
-	if typ == 'void *' {
+	if typ.trim_space() == 'void *' {
 		return Type{
 			name: 'voidptr'
 		}
-	} else if typ == 'void **' {
+	} else if typ.trim_space() == 'void **' {
 		return Type{
 			name: '&voidptr'
 		}
@@ -766,7 +766,9 @@ fn convert_type(typ_ string) Type {
 	else if typ.contains(':') {
 		typ = typ.all_before(':')
 	}
-	typ = typ.replace(' void *', 'voidptr')
+	// Replace void ** before void * to avoid partial matches
+	typ = typ.replace(' void **', ' &voidptr')
+	typ = typ.replace(' void *', ' voidptr')
 
 	// char*** => ***char
 	mut base := typ.trim_space()
