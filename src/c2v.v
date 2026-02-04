@@ -2008,7 +2008,16 @@ fn (mut c C2V) expr(_node &Node) string {
 		// sizeof (Type) ?
 		else {
 			typ := convert_type(node.ast_argument_type.qualified)
-			c.gen('(${typ.name})')
+			// Handle array types: sizeof([N]T) -> N * sizeof(T)
+			if typ.name.starts_with('[') && typ.name.contains(']') {
+				// Extract N and T from [N]T
+				bracket_end := typ.name.index(']') or { 0 }
+				n := typ.name[1..bracket_end]
+				element_type := typ.name[bracket_end + 1..]
+				c.gen('(${n} * sizeof(${element_type}))')
+			} else {
+				c.gen('(${typ.name})')
+			}
 		}
 	}
 	// a[0]
@@ -2017,7 +2026,21 @@ fn (mut c C2V) expr(_node &Node) string {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		c.expr(first_expr)
+		// Skip parentheses around simple identifiers in array access (e.g., (arr)[0] -> arr[0])
+		// This is needed because V doesn't handle sizeof((arr)[0]) well
+		// The AST structure is: ArraySubscriptExpr -> ImplicitCastExpr -> ParenExpr -> DeclRefExpr
+		mut actual_expr := first_expr
+		if first_expr.kindof(.implicit_cast_expr) && first_expr.inner.len > 0 {
+			inner := first_expr.inner[0]
+			if inner.kindof(.paren_expr) && inner.inner.len == 1 {
+				paren_inner := inner.inner[0]
+				if paren_inner.kindof(.decl_ref_expr) {
+					// Skip both the ImplicitCastExpr and ParenExpr, output just the identifier
+					actual_expr = paren_inner
+				}
+			}
+		}
+		c.expr(actual_expr)
 		c.gen('[')
 
 		second_expr := node.try_get_next_child() or {

@@ -1,0 +1,7 @@
+@[translated]
+module main
+
+fn get_array_size() int {
+	arr := [10]int{}
+	return sizeof(arr) / sizeof(arr[0])
+}
