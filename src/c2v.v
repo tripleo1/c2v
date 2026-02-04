@@ -166,6 +166,7 @@ mut:
 	inside_for          bool // to handle `;;++i`
 	inside_comma_expr   bool // to handle prefix ++/-- in comma expressions
 	inside_array_index  bool // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
+	pre_cond_stmts      []string // statements to output before conditions (for assignment-in-expr patterns)
 	global_struct_init  string
 	cur_out_line        string
 	inside_main         bool
@@ -1136,8 +1137,22 @@ fn (mut c C2V) if_statement(mut node Node) {
 		bad_node
 	}
 	c.gen_comment(expr)
+	// Clear pre-condition statements before processing condition
+	c.pre_cond_stmts.clear()
+	// First pass: just evaluate to collect any assignment-in-condition patterns
+	old_cur_out := c.cur_out_line
+	c.cur_out_line = ''
 	c.gen('if ')
 	c.gen_bool(expr)
+	cond_output := c.cur_out_line
+	c.cur_out_line = old_cur_out
+	// Output any collected pre-condition statements
+	for stmt in c.pre_cond_stmts {
+		c.genln(stmt)
+	}
+	c.pre_cond_stmts.clear()
+	// Output the condition
+	c.gen(cond_output)
 	// Main if block
 	mut child := node.try_get_next_child() or {
 		println(add_place_data_to_error(err))
@@ -1215,6 +1230,16 @@ fn (mut c C2V) for_st(mut node Node) {
 		// Handle comma expressions: output all but last before "for", last in init
 		if expr.kindof(.binary_operator) && expr.opcode == ',' {
 			c.for_comma_init(mut expr)
+		} else if expr.kindof(.binary_operator) && expr.opcode == '=' && expr.inner.len >= 2 {
+			// Handle chained assignments: for (i = j = 0; ...)
+			// Output inner assignments before for, keep outermost in init
+			second := expr.inner[1]
+			if second.kindof(.binary_operator) && second.opcode == '=' {
+				c.for_chained_assign(mut expr)
+			} else {
+				c.gen('for ')
+				c.expr(expr)
+			}
 		} else {
 			c.gen('for ')
 			c.expr(expr)
@@ -1279,6 +1304,49 @@ fn (mut c C2V) collect_comma_exprs(mut node Node, mut exprs []Node) {
 		c.collect_comma_exprs(mut second, mut exprs)
 	} else {
 		exprs << node
+	}
+}
+
+// Handle chained assignments in for loop init: for (i = j = 0; ...)
+// Outputs inner assignments before "for", keeps outermost assignment in init
+fn (mut c C2V) for_chained_assign(mut node Node) {
+	// Collect all chained assignments: i = j = k = 0 -> [(i, j), (j, k), (k, 0)]
+	// Output all inner ones before for, use last value for outer in for init
+	mut assigns := []Node{}
+	mut values := []Node{}
+	c.collect_chained_assigns(mut node, mut assigns, mut values)
+
+	// Output inner assignments before for (skip the outermost)
+	if values.len > 0 {
+		final_value := values[values.len - 1]
+		for i := 1; i < assigns.len; i++ {
+			c.expr(assigns[i])
+			c.gen(' = ')
+			c.expr(final_value)
+			c.genln('')
+		}
+	}
+
+	// Output for with outermost assignment
+	c.gen('for ')
+	if assigns.len > 0 && values.len > 0 {
+		c.expr(assigns[0])
+		c.gen(' = ')
+		c.expr(values[values.len - 1])
+	}
+}
+
+// Collect variables and final value from chained assignment
+fn (mut c C2V) collect_chained_assigns(mut node Node, mut assigns []Node, mut values []Node) {
+	if node.kindof(.binary_operator) && node.opcode == '=' && node.inner.len >= 2 {
+		first := node.inner[0]
+		assigns << first
+		mut second := node.inner[1]
+		if second.kindof(.binary_operator) && second.opcode == '=' {
+			c.collect_chained_assigns(mut second, mut assigns, mut values)
+		} else {
+			values << second
+		}
 	}
 }
 
@@ -1884,8 +1952,8 @@ fn (mut c C2V) expr(_node &Node) string {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		if op == '=' && second_expr.kindof(.binary_operator) && second_expr.opcode == '=' {
-			// handle `a = b = c` => `a = c; b = c;`
+		if op == '=' && second_expr.kindof(.binary_operator) && second_expr.opcode == '=' && !c.inside_for {
+			// handle `a = b = c` => `a = c; b = c;` (skip in for loop init)
 			second_child_expr := second_expr.try_get_next_child() or {
 				println(add_place_data_to_error(err))
 				bad_node
@@ -1953,10 +2021,26 @@ fn (mut c C2V) expr(_node &Node) string {
 			bad_node
 		}
 		// Skip parentheses around comma expressions since they become separate statements
-		// Skip parentheses around compound assignments since they are statements in V
+		// Skip parentheses around compound/simple assignments since they are statements in V
 		is_comma_expr := child.kindof(.binary_operator) && child.opcode == ','
 		is_compound_assign := child.kindof(.compound_assign_operator)
-		skip := c.skip_parens || is_comma_expr || is_compound_assign
+		is_simple_assign := child.kindof(.binary_operator) && child.opcode == '='
+		skip := c.skip_parens || is_comma_expr || is_compound_assign || is_simple_assign
+		// Handle assignment in condition: (x = expr) -> collect assignment, output x
+		if is_simple_assign && child.inner.len > 0 {
+			var_node := child.inner[0]
+			// Temporarily capture the assignment output
+			old_cur_out := c.cur_out_line
+			c.cur_out_line = ''
+			c.expr(child) // generates the assignment
+			assign_stmt := c.cur_out_line
+			c.cur_out_line = old_cur_out
+			// Store assignment for output before the condition
+			c.pre_cond_stmts << assign_stmt
+			// Output just the variable
+			c.expr(var_node)
+			return ''
+		}
 		if !skip {
 			c.gen('(')
 		}

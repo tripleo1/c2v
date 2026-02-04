@@ -1,0 +1,19 @@
+@[translated]
+module main
+
+@[weak]
+__global ep &i8
+
+fn test_negated_assign() {
+	ep = c'hello'
+	if !ep {
+		return
+	}
+}
+
+fn test_direct_assign() {
+	ep = c'world'
+	if ep {
+		return
+	}
+}
