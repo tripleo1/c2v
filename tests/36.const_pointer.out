@@ -1,0 +1,10 @@
+@[translated]
+module main
+
+fn use_const_ptr(str &i8) {
+	// str points to const data and is itself const
+}
+
+fn use_const_ptr2(ptr &i8) {
+	// ptr is const but the data it points to is not
+}

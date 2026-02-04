@@ -720,6 +720,8 @@ fn convert_type(typ_ string) Type {
 	if is_const {
 	}
 	typ = typ.replace('const ', '')
+	typ = typ.replace(' const', '')     // Handle "char * const" cases (const pointer with space)
+	typ = typ.replace('*const', '*')    // Handle "char *const" cases (const pointer without space)
 	typ = typ.replace('volatile ', '')
 	typ = typ.replace(' volatile', '')  // Handle "FILE *volatile" cases
 	typ = typ.replace('volatile', '')   // Handle any remaining volatile
