@@ -27,7 +27,11 @@ const builtin_fn_names = ['fopen', 'puts', 'fflush', 'getline', 'printf', 'memse
 	'rewind', 'write', 'calloc', 'setenv', 'gets', 'abs', 'sqrt', 'erfl', 'fprintf', 'snprintf',
 	'exit', '__stderrp', 'fwrite', 'scanf', 'sscanf', 'strrchr', 'strchr', 'div', 'free', 'memcmp',
 	'memmove', 'vsnprintf', 'rintf', 'rint', 'bsearch', 'qsort', '__stdinp', '__stdoutp', '__stderrp',
-	'getenv', 'strtoul', 'strtol', 'strtod', 'strtof', '__error', 'errno', 'atol', 'atof', 'atoll']
+	'getenv', 'strtoul', 'strtol', 'strtod', 'strtof', '__error', 'errno', 'atol', 'atof', 'atoll',
+	'fputs', 'fputc', 'putchar', 'getchar', 'putc', 'getc', 'feof', 'ferror', 'clearerr', 'fileno',
+	'isalnum', 'isalpha', 'isdigit', 'islower', 'isupper', 'isxdigit', 'iscntrl', 'isgraph', 'isprint', 'ispunct',
+	'tolower', 'strcat', 'strncat', 'strpbrk', 'strspn', 'strcspn', 'strstr', 'strerror',
+	'sprintf', 'vsprintf', 'vfprintf', 'vprintf', '__assert_rtn', '__builtin_expect']
 
 const c_known_fn_names = ['some_non_existant_c_fn_name']
 
@@ -1866,7 +1870,14 @@ fn (mut c C2V) var_decl(mut decl_stmt Node) {
 				if oldtyp.contains_any_substr(['dirtype_t', 'angle_t']) { // TODO DOOM handle int aliases
 					def = 'u32(0)'
 				} else {
-					def = '${typ}{}'
+					// Check if this is a type alias to a primitive type
+					// V doesn't allow TypeAlias{} for primitive type aliases, use TypeAlias(0) instead
+					underlying := c.resolve_type_alias(typ)
+					if underlying in ['u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'int', 'i64', 'f32', 'f64', 'usize', 'isize', 'bool'] {
+						def = '${typ}(0)'
+					} else {
+						def = '${typ}{}'
+					}
 				}
 			}
 			// vector<int> => int => []int
