@@ -1,0 +1,10 @@
+@[translated]
+module main
+
+type Cleanup_fn = fn (voidptr)
+
+type Single_arg_fn = fn (int) int
+
+fn use_cleanup(fn_ &Cleanup_fn, data voidptr) {
+	fn_(data)
+}

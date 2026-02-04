@@ -275,7 +275,8 @@ fn (mut c C2V) typedef_decl(node &Node) {
 			typ = tt.name
 		}
 		// Function type without pointer: int (args) - e.g., typedef int fn_name(args)
-		else if typ.contains('(') && typ.contains(')') && typ.contains(',') && !typ.starts_with('(') {
+		// Note: don't require comma - single-argument functions like "void (void *)" have no comma
+		else if typ.contains('(') && typ.contains(')') && !typ.starts_with('(') {
 			// Parse function type: "int (arg1, arg2, ...)" -> "fn (arg1, arg2) int"
 			ret_typ := convert_type(typ.all_before('(').trim_space())
 			mut s := 'fn ('
