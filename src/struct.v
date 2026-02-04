@@ -61,11 +61,22 @@ fn (mut c C2V) record_decl(node &Node) {
 	// in V it's `field struct {...}`, but in C we get struct definition first, so save it and use it in the
 	// next child
 	mut anon_struct_definition := ''
+	mut anon_enum_definition := ''
 	for field in node.inner {
 		c.gen_comment(field)
-		// Handle anon structs
+		// Handle anon structs and unions (unions appear as RecordDecl with tagUsed='union')
 		if field.kind == .record_decl {
-			anon_struct_definition = c.anon_struct_field_type(field)
+			is_union := field.tags.contains('union')
+			anon_struct_definition = c.anon_struct_field_type(field, is_union)
+			continue
+		}
+		if field.kind == .union_decl {
+			anon_struct_definition = c.anon_struct_field_type(field, true)
+			continue
+		}
+		// Handle anon enums
+		if field.kind == .enum_decl {
+			anon_enum_definition = c.anon_enum_field_type(field)
 			continue
 		}
 		// There may be comments, skip them
@@ -76,9 +87,14 @@ fn (mut c C2V) record_decl(node &Node) {
 		field_name := filter_name(field.name, false).uncapitalize()
 		mut field_type_name := field_type.name
 
-		// Handle anon structs, the anonymous struct has just been defined above, use its definition
-		if field_type_name.contains('unnamed at') {
+		// Handle anon structs/unions, the anonymous type has just been defined above, use its definition
+		// Note: "unnamed struct at" and "unnamed union at" both need to be handled
+		if (field_type_name.contains('unnamed struct at') || field_type_name.contains('unnamed union at') || field_type_name.contains('(unnamed at')) && !field_type_name.contains('unnamed enum') {
 			field_type_name = anon_struct_definition
+		}
+		// Handle anon enums
+		if field_type_name.contains('unnamed enum at') {
+			field_type_name = anon_enum_definition
 		}
 		if field_type_name.contains('anonymous at') {
 			continue
@@ -100,18 +116,62 @@ fn (mut c C2V) record_decl(node &Node) {
 	c.genln('}')
 }
 
-fn (mut c C2V) anon_struct_field_type(node &Node) string {
+fn (mut c C2V) anon_struct_field_type(node &Node, is_union bool) string {
 	mut sb := strings.new_builder(50)
-	sb.write_string(' struct {')
+	if is_union {
+		sb.write_string('union {\n')
+	} else {
+		sb.write_string('struct {\n')
+	}
+	mut nested_anon_def := ''
 	for field in node.inner {
+		// Handle nested anonymous struct/union definitions
+		if field.kind == .record_decl {
+			nested_is_union := field.tags.contains('union')
+			nested_anon_def = c.anon_struct_field_type(field, nested_is_union)
+			continue
+		}
 		if field.kind != .field_decl {
 			continue
 		}
 		field_type := convert_type(field.ast_type.qualified)
 		field_name := filter_name(field.name, false)
-		sb.write_string('\t${field_name} ${field_type.name}\n')
+		mut field_type_name := field_type.name
+		// Use nested anonymous definition if this field references one
+		if field_type_name.contains('unnamed struct at') || field_type_name.contains('unnamed union at') || field_type_name.contains('(unnamed at') || field_type_name.contains('anonymous at') {
+			field_type_name = nested_anon_def
+		}
+		sb.write_string('${field_name} ${field_type_name}\n')
 	}
-	sb.write_string('}\n')
+	sb.write_string('}')
+	return sb.str()
+}
+
+fn (mut c C2V) anon_enum_field_type(node &Node) string {
+	mut sb := strings.new_builder(50)
+	sb.write_string('enum {\n')
+	for i, child in node.inner {
+		if child.kind != .enum_constant_decl {
+			continue
+		}
+		c_name := filter_name(child.name, false)
+		v_name := c_name.camel_to_snake().trim_left('_')
+		sb.write_string('${v_name}')
+		// handle custom enum vals, e.g. `MF_SHOOTABLE = 4`
+		if child.inner.len > 0 {
+			mut const_expr := child.inner[0]
+			if const_expr.kind == .constant_expr && const_expr.inner.len > 0 {
+				// Try to get the literal value
+				literal := const_expr.inner[0]
+				if literal.kind == .integer_literal {
+					sb.write_string(' = ${literal.value.to_str()}')
+				}
+			}
+		}
+		sb.write_string('\n')
+		_ = i
+	}
+	sb.write_string('}')
 	return sb.str()
 }
 
@@ -145,9 +205,31 @@ fn (mut c C2V) typedef_decl(node &Node) {
 	}
 
 	if !typ.contains(c_alias_name) {
+		// Function pointer: int (*)(args)
 		if typ.contains('(*)') {
 			tt := convert_type(typ)
 			typ = tt.name
+		}
+		// Function type without pointer: int (args) - e.g., typedef int fn_name(args)
+		else if typ.contains('(') && typ.contains(')') && typ.contains(',') && !typ.starts_with('(') {
+			// Parse function type: "int (arg1, arg2, ...)" -> "fn (arg1, arg2) int"
+			ret_typ := convert_type(typ.all_before('(').trim_space())
+			mut s := 'fn ('
+			sargs := typ.find_between('(', ')')
+			args := sargs.split(',')
+			for i, arg in args {
+				t := convert_type(arg.trim_space())
+				s += t.name
+				if i < args.len - 1 {
+					s += ', '
+				}
+			}
+			if ret_typ.name == 'void' {
+				typ = s + ')'
+			} else {
+				typ = '${s}) ${ret_typ.name}'
+			}
+			typ = typ.replace('(void)', '()')
 		}
 		// Struct types have junk before spaces
 		else {

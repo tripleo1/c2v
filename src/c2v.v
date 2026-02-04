@@ -720,6 +720,8 @@ fn convert_type(typ_ string) Type {
 	}
 	typ = typ.replace('const ', '')
 	typ = typ.replace('volatile ', '')
+	typ = typ.replace(' volatile', '')  // Handle "FILE *volatile" cases
+	typ = typ.replace('volatile', '')   // Handle any remaining volatile
 	typ = typ.replace('std::', '')
 	if typ == 'char **' {
 		return Type{
@@ -901,7 +903,8 @@ fn convert_type(typ_ string) Type {
 	// fn type
 	// int (*)(void *, int, char **, char **)
 	// fn (voidptr, int, *byteptr, *byteptr) int
-	else if typ.contains('(*)') {
+	// Also handle: int (object_id *, ...) - function type without (*) syntax
+	else if typ.contains('(*)') || (typ.contains('(') && !typ.starts_with('(') && typ.contains(',')) {
 		ret_typ := convert_type(typ.all_before('('))
 		mut s := 'fn ('
 		// move fn to the right place
@@ -2006,6 +2009,11 @@ fn (mut c C2V) expr(_node &Node) string {
 		}
 		typ := convert_type(node.ast_type.qualified)
 		mut cast := typ.name
+		// Skip void casts like (void)0 - they're no-ops in C
+		if cast == 'void' {
+			c.gen('{}')
+			return ''
+		}
 		if cast.contains('*') {
 			cast = '(${cast})'
 		}
