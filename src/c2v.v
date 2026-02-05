@@ -182,6 +182,7 @@ mut:
 	inside_comma_expr   bool // to handle prefix ++/-- in comma expressions
 	inside_array_index  bool // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
 	inside_sizeof       bool // to skip unsafe blocks for pointer dereferences in sizeof
+	inside_unsafe       bool // to prevent nested unsafe blocks
 	pre_cond_stmts      []string // statements to output before conditions (for assignment-in-expr patterns)
 	global_struct_init  string
 	cur_out_line        string
@@ -2220,6 +2221,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		if is_deref_assign {
 			// For assignments to dereferenced pointers, wrap the entire assignment in unsafe
 			c.gen('unsafe { ')
+			c.inside_unsafe = true
 			// Get the pointer expression without the dereference wrapper
 			ptr_expr := deref_expr.try_get_next_child() or {
 				println(add_place_data_to_error(err))
@@ -2252,6 +2254,7 @@ fn (mut c C2V) expr(_node &Node) string {
 			} // `c`
 			c.expr(third_expr)
 			if is_deref_assign {
+				c.inside_unsafe = false
 				c.gen(' }')
 			}
 			c.genln('')
@@ -2264,6 +2267,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		} else {
 			c.expr(second_expr)
 			if is_deref_assign {
+				c.inside_unsafe = false
 				c.gen(' }')
 			}
 		}
@@ -2309,13 +2313,16 @@ fn (mut c C2V) expr(_node &Node) string {
 		} else if op == '*' {
 			// Pointer dereference - wrap in unsafe block for V
 			// Exception: inside sizeof, we don't need unsafe since sizeof doesn't evaluate its operand
-			if c.inside_sizeof {
+			// Exception: already inside unsafe, to prevent nested unsafe blocks
+			if c.inside_sizeof || c.inside_unsafe {
 				c.gen('*')
 				c.expr(expr)
 			} else {
 				// Use parentheses to ensure proper operator precedence
 				c.gen('(unsafe { *')
+				c.inside_unsafe = true
 				c.expr(expr)
+				c.inside_unsafe = false
 				c.gen(' })')
 			}
 		}
