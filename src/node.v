@@ -17,6 +17,7 @@ struct Node {
 	initialization_type  string       		@[json: 'init'] 				// "c" => "cinit"
 	value                Value 				@[json: 'value'] 			// For CharacterLiterals, since `value` is a number there, not at string
 	opcode               string 										// e.g. "+" in BinaryOperator
+	cast_kind            string       		@[json: 'castKind'] 		// e.g. "BitCast" in ImplicitCastExpr
 	ast_argument_type    AstJsonType  		@[json: 'argType']
 	declaration_id       string       		@[json: 'declId'] 			// for goto labels
 	label_id             string       		@[json: 'targetLabelDeclId'] // for goto statements

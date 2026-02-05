@@ -2314,7 +2314,30 @@ fn (mut c C2V) expr(_node &Node) string {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		if expr.kindof(.integer_literal) {
+		// Handle BitCast from void* to unsigned char* (byte pointer)
+		// This is common for byte-level operations
+		mut handled := false
+		if node.cast_kind == 'BitCast' {
+			from_type := convert_type(expr.ast_type.qualified).name
+			to_type := convert_type(node.ast_type.qualified).name
+			// void* -> &u8 cast
+			if from_type == 'voidptr' && to_type == '&u8' {
+				c.gen('&u8(')
+				c.expr(expr)
+				c.gen(')')
+				handled = true
+			}
+			// void* -> &i8 cast
+			else if from_type == 'voidptr' && to_type == '&i8' {
+				c.gen('&i8(')
+				c.expr(expr)
+				c.gen(')')
+				handled = true
+			}
+		}
+		if handled {
+			// Cast was handled, skip the rest
+		} else if expr.kindof(.integer_literal) {
 			typ := convert_type(node.ast_type.qualified).name
 			match typ {
 				'f32', 'f64' {
