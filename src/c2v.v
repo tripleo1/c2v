@@ -1913,6 +1913,8 @@ fn (mut c C2V) var_decl(mut decl_stmt Node) {
 			oldtyp := var_decl.ast_type.qualified
 			mut typ := typ_.name
 			vprintln('oldtyp="${oldtyp}" typ="${typ}"')
+			// Prefix external types with C.
+			typ = c.prefix_external_type(typ)
 			// set default zero value (V requires initialization)
 			mut def := ''
 			if var_decl.ast_type.desugared_qualified.starts_with('struct ') {
