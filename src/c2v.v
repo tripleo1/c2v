@@ -180,6 +180,7 @@ mut:
 	inside_switch_enum  bool
 	inside_for          bool // to handle `;;++i`
 	inside_comma_expr   bool // to handle prefix ++/-- in comma expressions
+	inside_for_post     bool // to keep comma operators inline in `for` post expressions
 	inside_array_index  bool // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
 	inside_sizeof       bool // to skip unsafe blocks for pointer dereferences in sizeof
 	inside_unsafe       bool // to prevent nested unsafe blocks
@@ -1529,7 +1530,9 @@ fn (mut c C2V) for_st(mut node Node) {
 		println(add_place_data_to_error(err))
 		bad_node
 	}
+	c.inside_for_post = true
 	c.expr(expr3)
+	c.inside_for_post = false
 	c.inside_for = false
 	mut child := node.try_get_next_child() or {
 		println(add_place_data_to_error(err))
@@ -2249,13 +2252,18 @@ fn (mut c C2V) expr(_node &Node) string {
 			}
 		} else {
 			c.expr(first_expr)
-		}
-		if op == ',' {
-			// Convert C comma operator to separate statements
-			c.genln('')
-		} else {
-			c.gen(' ${op} ')
-		}
+			}
+			if op == ',' {
+				if c.inside_for_post {
+					// Keep comma-separated updates in `for` post expressions.
+					c.gen(', ')
+				} else {
+					// Convert C comma operator to separate statements.
+					c.genln('')
+				}
+			} else {
+				c.gen(' ${op} ')
+			}
 		mut second_expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node

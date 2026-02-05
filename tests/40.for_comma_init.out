@@ -4,9 +4,20 @@ module main
 fn test() {
 	i := 0
 	j := 0
+	k := 0
 
 	i = 0
-	for j = 0; i < 10; i++ {
+	for j = 0; i < 5; i++ {
 		j++
 	}
+	i = 0
+	for j = 123; i < 10; i++, j++ {
+		j++
+	}
+	i = 0
+	j = 5
+	for k = 11; i < 7; i++, j++, k-- {
+		j += 5
+	}
 }
+
