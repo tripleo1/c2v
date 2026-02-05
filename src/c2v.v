@@ -429,8 +429,7 @@ fn (mut c C2V) save() {
 			c_fn_decls.write_string('fn C.__error() &int\n')
 		}
 		if s.contains('C.qsort') {
-			c_fn_decls.write_string('type C.qsort_callback_func = fn (voidptr, voidptr) int\n')
-			c_fn_decls.write_string('fn C.qsort(voidptr, usize, usize, C.qsort_callback_func)\n')
+			c_fn_decls.write_string('fn C.qsort(voidptr, usize, usize, fn (voidptr, voidptr) int)\n')
 		}
 		c_fn_decls.write_string('\n')
 	}
