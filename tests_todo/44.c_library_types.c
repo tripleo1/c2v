@@ -1,4 +1,10 @@
 // Test that C library types are properly translated
+// NOTE: this currently produces ONLY on linux:
+// ```
+// // External C type declarations (from headers)
+// struct C.Va_list {}
+// ```
+// which makes the test output unstable across macos/linux
 #include <stdint.h>
 #include <stdarg.h>
 #include <pthread.h>
