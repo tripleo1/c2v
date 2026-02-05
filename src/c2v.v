@@ -1622,6 +1622,59 @@ fn (mut c C2V) collect_chained_assigns(mut node Node, mut assigns []Node, mut va
 	}
 }
 
+fn (mut c C2V) gen_simple_assign(mut first_expr Node, mut second_expr Node) {
+	// Check if this is an assignment to a dereferenced pointer.
+	// The dereference might be wrapped in parentheses (e.g., errno macro expansion).
+	mut deref_expr := first_expr
+	if first_expr.kindof(.paren_expr) && first_expr.inner.len > 0 {
+		deref_expr = first_expr.inner[0]
+	}
+	mut is_deref_assign := deref_expr.kindof(.unary_operator) && deref_expr.opcode == '*'
+	mut deref_func_call := false
+	if is_deref_assign {
+		if deref_expr.inner.len == 0 {
+			is_deref_assign = false
+		} else {
+			// Get the pointer expression without the dereference wrapper.
+			ptr_expr := deref_expr.inner[0]
+			// Check if we're dereferencing a function call - V doesn't allow this on the left side.
+			if ptr_expr.kindof(.call_expr) || (ptr_expr.kindof(.implicit_cast_expr)
+				&& ptr_expr.inner.len > 0 && ptr_expr.inner[0].kindof(.call_expr)) {
+				// Generate a temporary variable for the function result.
+				deref_func_call = true
+				c.genln('{')
+				c.indent++
+				c.gen('tmp := ')
+				c.expr(ptr_expr)
+				c.genln('')
+				c.gen('unsafe { *tmp')
+			} else {
+				// For assignments to dereferenced pointers, wrap the entire assignment in unsafe.
+				c.gen('unsafe { ')
+				c.inside_unsafe = true
+				c.gen('*')
+				c.expr(ptr_expr)
+			}
+		}
+	}
+	if !is_deref_assign {
+		c.expr(first_expr)
+	}
+	c.gen(' = ')
+	c.expr(second_expr)
+	if is_deref_assign {
+		if !deref_func_call {
+			c.inside_unsafe = false
+		}
+		c.gen(' }')
+		if deref_func_call {
+			c.indent--
+			c.genln('')
+			c.gen('}')
+		}
+	}
+}
+
 fn (mut c C2V) do_st(mut node Node) {
 	c.genln('for {')
 	mut child := node.try_get_next_child() or {
@@ -2219,47 +2272,44 @@ fn (mut c C2V) expr(_node &Node) string {
 		if op == ',' {
 			c.inside_comma_expr = true
 		}
+		is_chained_assign := op == '=' && node.inner.len > 1
+			&& node.inner[1].kindof(.binary_operator) && node.inner[1].opcode == '='
+			&& !c.inside_for
+		if is_chained_assign {
+			// Expand `a = b = c` into assignment statements from right to left:
+			// b = c
+			// a = b
+			mut assigns := []Node{}
+			mut values := []Node{}
+			mut chain := node
+			c.collect_chained_assigns(mut chain, mut assigns, mut values)
+			if assigns.len > 0 && values.len > 0 {
+				final_value := values[values.len - 1]
+				for i := assigns.len - 1; i >= 0; i-- {
+					mut lhs := assigns[i]
+					mut rhs := if i == assigns.len - 1 { final_value } else { assigns[i + 1] }
+					c.gen_simple_assign(mut lhs, mut rhs)
+					if i > 0 {
+						c.genln('')
+					}
+				}
+			}
+			c.inside_comma_expr = was_inside_comma
+			vprintln('done!')
+			return ''
+		}
 		mut first_expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		// Check if this is an assignment to a dereferenced pointer
-		// The dereference might be wrapped in parentheses (e.g., errno macro expansion)
-		mut deref_expr := first_expr
-		if first_expr.kindof(.paren_expr) && first_expr.inner.len > 0 {
-			deref_expr = first_expr.inner[0]
-		}
-		mut is_deref_assign := op == '=' && deref_expr.kindof(.unary_operator)
-			&& deref_expr.opcode == '*'
-		mut deref_func_call := false
-		if is_deref_assign {
-			// Get the pointer expression without the dereference wrapper
-			ptr_expr := deref_expr.try_get_next_child() or {
+		if op == '=' {
+			mut second_expr := node.try_get_next_child() or {
 				println(add_place_data_to_error(err))
 				bad_node
 			}
-			// Check if we're dereferencing a function call - V doesn't allow this on the left side
-			if ptr_expr.kindof(.call_expr) || (ptr_expr.kindof(.implicit_cast_expr)
-				&& ptr_expr.inner.len > 0 && ptr_expr.inner[0].kindof(.call_expr)) {
-				// Generate a temporary variable for the function result
-				deref_func_call = true
-				c.genln('{')
-				c.indent++
-				c.gen('tmp := ')
-				c.expr(ptr_expr)
-				c.genln('')
-				c.gen('unsafe { *tmp')
-			} else {
-				// For assignments to dereferenced pointers, wrap the entire assignment in unsafe
-				c.gen('unsafe { ')
-				c.inside_unsafe = true
-				c.gen('*')
-				c.expr(ptr_expr)
-			}
-		} else {
+			c.gen_simple_assign(mut first_expr, mut second_expr)
+		} else if op == ',' {
 			c.expr(first_expr)
-		}
-		if op == ',' {
 			if c.inside_for_post {
 				// Keep comma-separated updates in `for` post expressions.
 				c.gen(', ')
@@ -2267,56 +2317,19 @@ fn (mut c C2V) expr(_node &Node) string {
 				// Convert C comma operator to separate statements.
 				c.genln('')
 			}
-		} else {
-			c.gen(' ${op} ')
-		}
-		mut second_expr := node.try_get_next_child() or {
-			println(add_place_data_to_error(err))
-			bad_node
-		}
-		if op == '=' && second_expr.kindof(.binary_operator) && second_expr.opcode == '='
-			&& !c.inside_for {
-			// handle `a = b = c` => `a = c; b = c;` (skip in for loop init)
-			second_child_expr := second_expr.try_get_next_child() or {
+			mut second_expr := node.try_get_next_child() or {
 				println(add_place_data_to_error(err))
 				bad_node
-			} // `b`
-			mut third_expr := second_expr.try_get_next_child() or {
-				println(add_place_data_to_error(err))
-				bad_node
-			} // `c`
-			c.expr(third_expr)
-			if is_deref_assign {
-				if !deref_func_call {
-					c.inside_unsafe = false
-				}
-				c.gen(' }')
-				if deref_func_call {
-					c.indent--
-					c.genln('')
-					c.gen('}')
-				}
 			}
-			c.genln('')
-			c.expr(second_child_expr)
-			c.gen(' = ')
-			first_expr.current_child_id = 0
-			c.expr(first_expr)
-			c.gen('')
-			second_expr.current_child_id = 0
-		} else {
 			c.expr(second_expr)
-			if is_deref_assign {
-				if !deref_func_call {
-					c.inside_unsafe = false
-				}
-				c.gen(' }')
-				if deref_func_call {
-					c.indent--
-					c.genln('')
-					c.gen('}')
-				}
+		} else {
+			c.expr(first_expr)
+			c.gen(' ${op} ')
+			mut second_expr := node.try_get_next_child() or {
+				println(add_place_data_to_error(err))
+				bad_node
 			}
+			c.expr(second_expr)
 		}
 		c.inside_comma_expr = was_inside_comma
 		vprintln('done!')
