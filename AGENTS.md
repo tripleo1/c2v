@@ -1,37 +1,52 @@
 This project is a C-to-V translator.
 
-Always run commands from the top-level repository folder.
+Always run project commands from the repository root:
+`.../.vmodules/c2v`.
 
 # Instruction Priority
 If instructions conflict, follow them in this order:
 1. System/developer/user instructions from the active session.
 2. This `AGENTS.md` file.
 
-# Quick Start
+# Prerequisites
+Verify required tools before build/test commands:
+1. `v version`
+2. `cc --version` (or `clang --version`)
+
+If either tool is missing, stop and report the missing dependency.
+
+# Canonical Commands
 1. Build: `v .`
 2. Run one C test file: `v run tests/run_tests.vsh tests/ptr_deref.c`
 3. Run all tests: `v run tests/run_tests.vsh`
-4. Format source: `v fmt -w src/`
+4. Format translator sources only: `v fmt -w src/`
 
-# Expected Success Signals
-- Build: `v .` completes without compiler errors.
-- Single test: the selected test file reports pass/success and no runtime errors.
-- Full test run: all tests complete with no failing test cases.
-- Formatting: `v fmt -w src/` completes without format errors.
+# Machine-Checkable Success Signals
+- Build succeeds when `v .` exits with code `0`.
+- Single-test succeeds when command exits with `0` and output contains no `FAIL`.
+- Full test run succeeds when command exits with `0` and output contains no `FAIL`.
+- Formatting succeeds when `v fmt -w src/` exits with code `0`.
+
+# Runtime Guidance
+- Build and single-test are the default validation loop.
+- Full test run is slower; run it before finishing substantial code changes.
+- The test runner rebuilds `c2v` and formats generated `tests/*.v` files during execution.
 
 # Do Not
-- Do not run project commands from subdirectories; use the repo root only.
-- Do not run single-file tests with non-`tests/*.c` paths.
+- Do not run project commands from subdirectories.
+- Do not run single-test mode with non-`tests/*.c` paths.
 - Do not format outside `src/` unless explicitly requested.
 
 # Troubleshooting
-- Wrong folder: if commands fail unexpectedly, run `pwd` and ensure you are in the repo root (`.../.vmodules/c2v`).
-- Build command not found: verify V is installed and available with `v version`.
+- Wrong folder: run `pwd` and ensure it ends with `.vmodules/c2v`.
+- `v` not found: verify with `v version`.
+- C compiler not found: verify with `cc --version` or `clang --version`.
 - Single-test path issues: pass a `.c` file under `tests/`, for example `tests/ptr_deref.c`.
-- Formatting scope: format only translator sources with `v fmt -w src/`.
+- If output is noisy, check command exit code first; non-zero exit means failure.
 
 # Pre-PR Checklist
-1. `v .`
-2. `v run tests/run_tests.vsh tests/ptr_deref.c`
-3. `v run tests/run_tests.vsh`
-4. `v fmt -w src/`
+Run the Canonical Commands in order:
+1. Build.
+2. Single test (`tests/ptr_deref.c`).
+3. Full test suite.
+4. Format `src/`.
