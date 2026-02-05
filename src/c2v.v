@@ -2218,17 +2218,30 @@ fn (mut c C2V) expr(_node &Node) string {
 			deref_expr = first_expr.inner[0]
 		}
 		mut is_deref_assign := op == '=' && deref_expr.kindof(.unary_operator) && deref_expr.opcode == '*'
+		mut deref_func_call := false
 		if is_deref_assign {
-			// For assignments to dereferenced pointers, wrap the entire assignment in unsafe
-			c.gen('unsafe { ')
-			c.inside_unsafe = true
 			// Get the pointer expression without the dereference wrapper
 			ptr_expr := deref_expr.try_get_next_child() or {
 				println(add_place_data_to_error(err))
 				bad_node
 			}
-			c.gen('*')
-			c.expr(ptr_expr)
+			// Check if we're dereferencing a function call - V doesn't allow this on the left side
+			if ptr_expr.kindof(.call_expr) || (ptr_expr.kindof(.implicit_cast_expr) && ptr_expr.inner.len > 0 && ptr_expr.inner[0].kindof(.call_expr)) {
+				// Generate a temporary variable for the function result
+				deref_func_call = true
+				c.genln('{')
+				c.indent++
+				c.gen('tmp := ')
+				c.expr(ptr_expr)
+				c.genln('')
+				c.gen('unsafe { *tmp')
+			} else {
+				// For assignments to dereferenced pointers, wrap the entire assignment in unsafe
+				c.gen('unsafe { ')
+				c.inside_unsafe = true
+				c.gen('*')
+				c.expr(ptr_expr)
+			}
 		} else {
 			c.expr(first_expr)
 		}
@@ -2254,8 +2267,15 @@ fn (mut c C2V) expr(_node &Node) string {
 			} // `c`
 			c.expr(third_expr)
 			if is_deref_assign {
-				c.inside_unsafe = false
+				if !deref_func_call {
+					c.inside_unsafe = false
+				}
 				c.gen(' }')
+				if deref_func_call {
+					c.indent--
+					c.genln('')
+					c.gen('}')
+				}
 			}
 			c.genln('')
 			c.expr(second_child_expr)
@@ -2267,8 +2287,15 @@ fn (mut c C2V) expr(_node &Node) string {
 		} else {
 			c.expr(second_expr)
 			if is_deref_assign {
-				c.inside_unsafe = false
+				if !deref_func_call {
+					c.inside_unsafe = false
+				}
 				c.gen(' }')
+				if deref_func_call {
+					c.indent--
+					c.genln('')
+					c.gen('}')
+				}
 			}
 		}
 		c.inside_comma_expr = was_inside_comma
