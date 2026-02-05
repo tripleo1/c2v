@@ -13,5 +13,7 @@ struct Has_enum_ptr {
 }
 
 fn use_enum_ptr(c &Color) {
-	*c = Color.red
+	unsafe {
+		*c = Color.red
+	}
 }
