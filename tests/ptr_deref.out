@@ -22,17 +22,22 @@ fn test_ptr_ops(endptr &&u8, value &int) {
 	frac := 5
 	fracstep := 2
 	fracbits := 2
-	dest := &int(0)
+	dest1 := &int(0)
 	dest2 := &int(0)
+	dest3 := &int(0)
 	for {
 		unsafe {
-			*dest2 = dc_colormap[dc_source[(frac >> fracbits) & 127]]
+			*dest1 = dc_colormap[dc_source[(frac >> fracbits) & 127]]
 		}
 		unsafe {
-			*dest = *dest2
+			*dest2 = *dest1
 		}
-		dest += 320
+		unsafe {
+			*dest3 = *dest2
+		}
+		dest1 += 320
 		dest2 += 320
+		dest3 += 320
 		frac += fracstep
 		// while()
 		if !(count--) {
