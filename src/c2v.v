@@ -414,6 +414,26 @@ fn (mut c C2V) save() {
 		}
 	}
 	// Generate declarations for external C types
+	// Generate common C function declarations if they're used
+	mut c_fn_decls := strings.new_builder(100)
+	needs_c_fns := s.contains('C.getenv') || s.contains('C.strtoul') || s.contains('C.__error') || s.contains('C.qsort')
+	if needs_c_fns {
+		c_fn_decls.write_string('\n// Common C function declarations\n')
+		if s.contains('C.getenv') {
+			c_fn_decls.write_string('fn C.getenv(&i8) &i8\n')
+		}
+		if s.contains('C.strtoul') {
+			c_fn_decls.write_string('fn C.strtoul(&i8, &&i8, int) u64\n')
+		}
+		if s.contains('C.__error') {
+			c_fn_decls.write_string('fn C.__error() &int\n')
+		}
+		if s.contains('C.qsort') {
+			c_fn_decls.write_string('type C.qsort_callback_func = fn (voidptr, voidptr) int\n')
+			c_fn_decls.write_string('fn C.qsort(voidptr, usize, usize, C.qsort_callback_func)\n')
+		}
+		c_fn_decls.write_string('\n')
+	}
 	if c.external_types.len > 0 {
 		mut external_decls := strings.new_builder(200)
 		external_decls.write_string('\n// External C type declarations (from headers)\n')
@@ -424,9 +444,17 @@ fn (mut c C2V) save() {
 		// Insert after @[translated] and module lines
 		insert_pos := s.index('\n\n') or { 0 }
 		if insert_pos > 0 {
-			s = s[..insert_pos + 1] + external_decls.str() + s[insert_pos + 1..]
+			s = s[..insert_pos + 1] + c_fn_decls.str() + external_decls.str() + s[insert_pos + 1..]
 		} else {
-			s = external_decls.str() + s
+			s = c_fn_decls.str() + external_decls.str() + s
+		}
+	} else if needs_c_fns {
+		// Insert C function declarations even if no external types
+		insert_pos := s.index('\n\n') or { 0 }
+		if insert_pos > 0 {
+			s = s[..insert_pos + 1] + c_fn_decls.str() + s[insert_pos + 1..]
+		} else {
+			s = c_fn_decls.str() + s
 		}
 	}
 	c.out_file.write_string(s) or { panic('failed to write to the .v file: ${err}') }
@@ -1043,6 +1071,24 @@ fn convert_type(typ_ string) Type {
 		}
 		'pthread_key_t' {
 			'C.pthread_key_t'
+		}
+		'off_t' {
+			'i64'
+		}
+		'uid_t', 'gid_t' {
+			'u32'
+		}
+		'pid_t' {
+			'int'
+		}
+		'time_t' {
+			'i64'
+		}
+		'mode_t' {
+			'u32'
+		}
+		'dev_t' {
+			'u64'
 		}
 		else {
 			mut capitalized := trim_underscores(base.capitalize())
