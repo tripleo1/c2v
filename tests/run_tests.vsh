@@ -27,7 +27,7 @@ fn try_process_filter_argument() string {
 		println('Usage: v run tests/run_tests.vsh ([testname])')
 		exit(0)
 	} else {
-		return second_argument
+		return second_argument.all_after('./')
 	}
 
 	return ''
