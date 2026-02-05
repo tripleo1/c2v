@@ -1,0 +1,13 @@
+@[translated]
+module main
+
+// Test pointer dereference operations
+fn test_ptr_ops(endptr &&u8, value &int) {
+	// Reading from dereferenced pointer
+	if (unsafe { *endptr }) != &i8((unsafe { nil })) {
+		// Assigning to dereferenced pointer
+		unsafe {
+			*value = 42
+		}
+	}
+}

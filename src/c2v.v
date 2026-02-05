@@ -2209,7 +2209,26 @@ fn (mut c C2V) expr(_node &Node) string {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		c.expr(first_expr)
+		// Check if this is an assignment to a dereferenced pointer
+		// The dereference might be wrapped in parentheses (e.g., errno macro expansion)
+		mut deref_expr := first_expr
+		if first_expr.kindof(.paren_expr) && first_expr.inner.len > 0 {
+			deref_expr = first_expr.inner[0]
+		}
+		mut is_deref_assign := op == '=' && deref_expr.kindof(.unary_operator) && deref_expr.opcode == '*'
+		if is_deref_assign {
+			// For assignments to dereferenced pointers, wrap the entire assignment in unsafe
+			c.gen('unsafe { ')
+			// Get the pointer expression without the dereference wrapper
+			ptr_expr := deref_expr.try_get_next_child() or {
+				println(add_place_data_to_error(err))
+				bad_node
+			}
+			c.gen('*')
+			c.expr(ptr_expr)
+		} else {
+			c.expr(first_expr)
+		}
 		if op == ',' {
 			// Convert C comma operator to separate statements
 			c.genln('')
@@ -2231,6 +2250,9 @@ fn (mut c C2V) expr(_node &Node) string {
 				bad_node
 			} // `c`
 			c.expr(third_expr)
+			if is_deref_assign {
+				c.gen(' }')
+			}
 			c.genln('')
 			c.expr(second_child_expr)
 			c.gen(' = ')
@@ -2240,6 +2262,9 @@ fn (mut c C2V) expr(_node &Node) string {
 			second_expr.current_child_id = 0
 		} else {
 			c.expr(second_expr)
+			if is_deref_assign {
+				c.gen(' }')
+			}
 		}
 		c.inside_comma_expr = was_inside_comma
 		vprintln('done!')
@@ -2277,9 +2302,15 @@ fn (mut c C2V) expr(_node &Node) string {
 				// but do not generate `++i` in for loops, it breaks in V for some reason
 				c.gen('$')
 			}
-		} else if op == '-' || op == '&' || op == '*' || op == '!' || op == '~' {
+		} else if op == '-' || op == '&' || op == '!' || op == '~' {
 			c.gen(op)
 			c.expr(expr)
+		} else if op == '*' {
+			// Pointer dereference - wrap in unsafe block for V
+			// Use parentheses to ensure proper operator precedence
+			c.gen('(unsafe { *')
+			c.expr(expr)
+			c.gen(' })')
 		}
 	}
 	// ()
