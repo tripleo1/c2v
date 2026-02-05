@@ -6,6 +6,7 @@
 import term
 import os
 
+const autofix = os.getenv('VAUTOFIX') != ''
 const c2v_dir = @VMODROOT
 const tests_dir = join_path(c2v_dir, 'tests')
 const exe_path = join_path(c2v_dir, $if windows {
@@ -112,11 +113,15 @@ fn run_tests(test_file_extension string, c2v_opts string, filter string) bool {
 
 		format_generated_file(generated_file)
 
+		expected_file_path := get_expected_file_path(file, test_file_extension)
 		expected := get_expected_file_content(file, test_file_extension)
 		result := get_result_file_content(generated_file, test_file_extension)
 
 		if expected != result {
 			print_test_fail_details(expected, result, c2v_cmd)
+			if autofix {
+				os.write_file(expected_file_path, result) or {}
+			}
 			return false
 		} else {
 			do_post_test_cleanup(generated_file)
@@ -161,8 +166,12 @@ fn format_generated_file(file string) {
 	system('v fmt -w ${file}')
 }
 
+fn get_expected_file_path(file string, test_file_extension string) string {
+	return replace_file_extension(file, test_file_extension, '.out')
+}
+
 fn get_expected_file_content(file string, test_file_extension string) string {
-	file_content := read_file(replace_file_extension(file, test_file_extension, '.out')) or { '' }
+	file_content := read_file(get_expected_file_path(file, test_file_extension)) or { '' }
 	return file_content.trim_space()
 }
 
