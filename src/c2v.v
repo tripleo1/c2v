@@ -416,7 +416,8 @@ fn (mut c C2V) save() {
 	// Generate declarations for external C types
 	// Generate common C function declarations if they're used
 	mut c_fn_decls := strings.new_builder(100)
-	needs_c_fns := s.contains('C.getenv') || s.contains('C.strtoul') || s.contains('C.__error') || s.contains('C.qsort')
+	needs_c_fns := s.contains('C.getenv') || s.contains('C.strtoul') || s.contains('C.__error') ||
+	               s.contains('C.qsort') || s.contains('C.__builtin_expect') || s.contains('C.__assert_rtn')
 	if needs_c_fns {
 		c_fn_decls.write_string('\n// Common C function declarations\n')
 		if s.contains('C.getenv') {
@@ -430,6 +431,12 @@ fn (mut c C2V) save() {
 		}
 		if s.contains('C.qsort') {
 			c_fn_decls.write_string('fn C.qsort(voidptr, usize, usize, fn (voidptr, voidptr) int)\n')
+		}
+		if s.contains('C.__builtin_expect') {
+			c_fn_decls.write_string('fn C.__builtin_expect(int, int) int\n')
+		}
+		if s.contains('C.__assert_rtn') {
+			c_fn_decls.write_string('fn C.__assert_rtn(&i8, &i8, int, &i8)\n')
 		}
 		c_fn_decls.write_string('\n')
 	}
@@ -2537,8 +2544,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		vprintln(node.str())
 	} else if node.kindof(.predefined_expr) {
 		v_predefined := match node.name {
-			'__FUNCTION__' { '@FN' }
-			'__func__' { '@FN' }
+			'__FUNCTION__', '__func__' { '@FN.str' }  // .str for C compatibility
 			'__line__' { '@LINE' }
 			'__file__' { '@FILE' }
 			else { '' }
