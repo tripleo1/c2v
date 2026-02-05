@@ -72,7 +72,8 @@ fn (mut c C2V) record_decl(node &Node) {
 			if field_type.name.contains('unnamed enum at') {
 				// Generate a named enum for this anonymous enum
 				field_name := filter_name(field.name, false)
-				enum_name := c.generate_named_enum_for_anon(pending_enum, struct_v_name, field_name)
+				enum_name := c.generate_named_enum_for_anon(pending_enum, struct_v_name,
+					field_name)
 				anon_enum_names[i] = enum_name
 			}
 			pending_enum = unsafe { nil }
@@ -119,12 +120,18 @@ fn (mut c C2V) record_decl(node &Node) {
 		field_type := convert_type(field.ast_type.qualified)
 		filtered := filter_name(field.name, false)
 		// Don't uncapitalize if it's a C. prefixed name (builtin function)
-		field_name := if filtered.starts_with('C.') { filtered[2..] + '_' } else { filtered.uncapitalize() }
+		field_name := if filtered.starts_with('C.') {
+			filtered[2..] + '_'
+		} else {
+			filtered.uncapitalize()
+		}
 		mut field_type_name := field_type.name
 
 		// Handle anon structs/unions, the anonymous type has just been defined above, use its definition
 		// Note: "unnamed struct at" and "unnamed union at" both need to be handled
-		if (field_type_name.contains('unnamed struct at') || field_type_name.contains('unnamed union at') || field_type_name.contains('(unnamed at')) && !field_type_name.contains('unnamed enum') {
+		if (field_type_name.contains('unnamed struct at')
+			|| field_type_name.contains('unnamed union at')
+			|| field_type_name.contains('(unnamed at')) && !field_type_name.contains('unnamed enum') {
 			field_type_name = anon_struct_definition
 		}
 		// Handle anon enums - use the pre-generated named enum type
@@ -177,7 +184,9 @@ fn (mut c C2V) anon_struct_field_type(node &Node, is_union bool) string {
 		field_name := filter_name(field.name, false)
 		mut field_type_name := field_type.name
 		// Use nested anonymous definition if this field references one
-		if field_type_name.contains('unnamed struct at') || field_type_name.contains('unnamed union at') || field_type_name.contains('(unnamed at') || field_type_name.contains('anonymous at') {
+		if field_type_name.contains('unnamed struct at')
+			|| field_type_name.contains('unnamed union at')
+			|| field_type_name.contains('(unnamed at') || field_type_name.contains('anonymous at') {
 			field_type_name = nested_anon_def
 		}
 		// Apply external type prefix for types from headers
