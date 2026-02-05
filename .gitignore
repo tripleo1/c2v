@@ -13,3 +13,5 @@ tests/**.json
 
 tests/test.c/1.hello.json
 tests/*.v
+tests_todo/*.v
+tests_todo/*.json
