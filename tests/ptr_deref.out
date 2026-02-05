@@ -10,4 +10,9 @@ fn test_ptr_ops(endptr &&u8, value &int) {
 			*value = 42
 		}
 	}
+	abc := 123
+	pabc := &abc
+	unsafe {
+		*value = *pabc
+	}
 }
