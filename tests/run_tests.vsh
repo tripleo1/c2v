@@ -79,6 +79,10 @@ fn run_tests(test_file_extension string, c2v_opts string, filter string) bool {
 
 	current_platform := os.user_os()
 	next_file: for file in files {
+		if filter != '' {
+			file.index(filter) or { continue }
+		}
+
 		// skip all platform dependent .c/.out pairs, on non matching platforms:
 		for platform in ['linux', 'macos', 'windows'] {
 			if file.ends_with('_${platform}.c') && current_platform != platform {
@@ -88,10 +92,6 @@ fn run_tests(test_file_extension string, c2v_opts string, filter string) bool {
 		}
 
 		print(file + '...  ')
-
-		if filter != '' {
-			file.index(filter) or { continue }
-		}
 
 		if try_compile_test_file(file) == false {
 			return false
