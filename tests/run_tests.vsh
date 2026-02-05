@@ -138,7 +138,7 @@ fn try_compile_test_file(file string) bool {
 	res := execute(cmd)
 
 	if res.exit_code != 0 {
-		eprintln('failed to compile C test `${file}`')
+		eprintln(term.colorize(term.red, '\nfailed to compile C test `${file}`'))
 		eprintln('command: ${cmd}')
 		return false
 	}

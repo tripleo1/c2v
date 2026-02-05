@@ -15,4 +15,28 @@ fn test_ptr_ops(endptr &&u8, value &int) {
 	unsafe {
 		*value = *pabc
 	}
+	// check `*x = *y = value;`
+	count := 10
+	dc_colormap := &count
+	dc_source := &count
+	frac := 5
+	fracstep := 2
+	fracbits := 2
+	dest := &int(0)
+	dest2 := &int(0)
+	for {
+		unsafe {
+			*dest2 = dc_colormap[dc_source[(frac >> fracbits) & 127]]
+		}
+		unsafe {
+			*dest = *dest2
+		}
+		dest += 320
+		dest2 += 320
+		frac += fracstep
+		// while()
+		if !(count--) {
+			break
+		}
+	}
 }
