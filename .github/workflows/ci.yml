@@ -39,6 +39,8 @@ jobs:
           v -g ~/.vmodules/c2v/ || true
       - name: The project files should be always formatted
         run: v fmt -verify ~/.vmodules/c2v/
+      - name: The Markdown files in the project should be always formatted
+        run: v check-md ~/.vmodules/c2v/
       - name: Test C2V
         run: v -g test ~/.vmodules/c2v/
       - name: Build original Chocolate Doom
@@ -106,6 +108,8 @@ jobs:
           v -g ~/.vmodules/c2v/ || true
       - name: The project files should be always formatted
         run: v fmt -verify ~/.vmodules/c2v/
+      - name: The Markdown files in the project should be always formatted
+        run: v check-md ~/.vmodules/c2v/
       - name: Test C2V
         run: v -g test ~/.vmodules/c2v/
       - name: Build original Chocolate Doom
