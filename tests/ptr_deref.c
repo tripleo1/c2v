@@ -1,6 +1,13 @@
 // Test pointer dereference operations
 #include <stdlib.h>
 
+
+typedef struct mobj_t {
+   int value;
+   struct mobj_t *bnext;
+   struct mobj_t *bprev;   
+} mobj_t;
+
 void test_ptr_ops(char **endptr, int *value) {
   // Reading from dereferenced pointer
   if (*endptr != NULL) {
@@ -30,4 +37,13 @@ void test_ptr_ops(char **endptr, int *value) {
      frac += fracstep;
   } while (count--);
 
+  // check chained dereferencing:
+   mobj_t the_thing;
+   the_thing.value = 456;
+   mobj_t* thing = &the_thing;
+   mobj_t**        link;
+   thing->bnext = *link;
+   if (*link)
+     (*link)->bprev = thing;
+   *link = thing;
 }

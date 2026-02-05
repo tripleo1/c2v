@@ -1622,6 +1622,58 @@ fn (mut c C2V) collect_chained_assigns(mut node Node, mut assigns []Node, mut va
 	}
 }
 
+fn (c &C2V) unwrap_expr_for_deref_check(node Node) Node {
+	mut cur := node
+	for {
+		if cur.kindof(.implicit_cast_expr) && cur.inner.len > 0 {
+			cur = cur.inner[0]
+			continue
+		}
+		if cur.kindof(.paren_expr) && cur.inner.len > 0 {
+			cur = cur.inner[0]
+			continue
+		}
+		break
+	}
+	return cur
+}
+
+fn (c &C2V) expr_contains_deref(node Node) bool {
+	cur := c.unwrap_expr_for_deref_check(node)
+	if cur.kindof(.unary_operator) && cur.opcode == '*' {
+		return true
+	}
+	for child in cur.inner {
+		if c.expr_contains_deref(child) {
+			return true
+		}
+	}
+	return false
+}
+
+fn (mut c C2V) gen_assign_rhs_deref_no_parens(mut node Node) bool {
+	if c.inside_sizeof {
+		return false
+	}
+	mut cur := c.unwrap_expr_for_deref_check(node)
+	if !cur.kindof(.unary_operator) || cur.opcode != '*' || cur.inner.len == 0 {
+		return false
+	}
+	mut ptr_expr := cur.inner[0]
+	if c.inside_unsafe {
+		c.gen('*')
+		c.expr(ptr_expr)
+		return true
+	}
+	c.gen('unsafe { *')
+	old_inside_unsafe := c.inside_unsafe
+	c.inside_unsafe = true
+	c.expr(ptr_expr)
+	c.inside_unsafe = old_inside_unsafe
+	c.gen(' }')
+	return true
+}
+
 fn (mut c C2V) gen_simple_assign(mut first_expr Node, mut second_expr Node) {
 	// Check if this is an assignment to a dereferenced pointer.
 	// The dereference might be wrapped in parentheses (e.g., errno macro expansion).
@@ -1631,6 +1683,7 @@ fn (mut c C2V) gen_simple_assign(mut first_expr Node, mut second_expr Node) {
 	}
 	mut is_deref_assign := deref_expr.kindof(.unary_operator) && deref_expr.opcode == '*'
 	mut deref_func_call := false
+	mut lhs_contains_deref := false
 	if is_deref_assign {
 		if deref_expr.inner.len == 0 {
 			is_deref_assign = false
@@ -1658,10 +1711,19 @@ fn (mut c C2V) gen_simple_assign(mut first_expr Node, mut second_expr Node) {
 		}
 	}
 	if !is_deref_assign {
+		lhs_contains_deref = c.expr_contains_deref(first_expr)
+		if lhs_contains_deref {
+			c.gen('unsafe { ')
+			c.inside_unsafe = true
+		}
+	}
+	if !is_deref_assign {
 		c.expr(first_expr)
 	}
 	c.gen(' = ')
-	c.expr(second_expr)
+	if !c.gen_assign_rhs_deref_no_parens(mut second_expr) {
+		c.expr(second_expr)
+	}
 	if is_deref_assign {
 		if !deref_func_call {
 			c.inside_unsafe = false
@@ -1672,6 +1734,9 @@ fn (mut c C2V) gen_simple_assign(mut first_expr Node, mut second_expr Node) {
 			c.genln('')
 			c.gen('}')
 		}
+	} else if lhs_contains_deref {
+		c.inside_unsafe = false
+		c.gen(' }')
 	}
 }
 
@@ -1933,11 +1998,44 @@ fn (mut c C2V) st_block2(mut node Node, insert_start bool) {
 	}
 }
 
-//
-fn (mut c C2V) gen_bool(node &Node) {
-	typ := c.expr(node)
-	if typ == 'int' {
+fn (c &C2V) is_pointer_ast_type(type_name string) bool {
+	if type_name == '' {
+		return false
 	}
+	v_type := convert_type(type_name).name
+	return v_type.starts_with('&') || v_type == 'voidptr'
+}
+
+fn (c &C2V) should_compare_ptr_cond_to_nil(node &Node) bool {
+	if c.is_comparison_expr(*node) {
+		return false
+	}
+	if !c.expr_contains_deref(*node) {
+		return false
+	}
+	if c.is_pointer_ast_type(node.ast_type.qualified) {
+		return true
+	}
+	unwrapped := c.unwrap_expr_for_deref_check(*node)
+	return c.is_pointer_ast_type(unwrapped.ast_type.qualified)
+}
+
+fn (mut c C2V) gen_bool(node &Node) {
+	if c.should_compare_ptr_cond_to_nil(node) {
+		if c.expr_contains_deref(*node) && !c.inside_unsafe {
+			c.gen('unsafe { ')
+			old_inside_unsafe := c.inside_unsafe
+			c.inside_unsafe = true
+			c.expr(node)
+			c.inside_unsafe = old_inside_unsafe
+			c.gen(' != nil }')
+		} else {
+			c.expr(node)
+			c.gen(' != nil')
+		}
+		return
+	}
+	c.expr(node)
 }
 
 fn (mut c C2V) var_decl(mut decl_stmt Node) {

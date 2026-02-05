@@ -2,6 +2,12 @@
 module main
 
 // Test pointer dereference operations
+struct Mobj_t {
+	value int
+	bnext &Mobj_t
+	bprev &Mobj_t
+}
+
 fn test_ptr_ops(endptr &&u8, value &int) {
 	// Reading from dereferenced pointer
 	if (unsafe { *endptr }) != &i8((unsafe { nil })) {
@@ -43,5 +49,19 @@ fn test_ptr_ops(endptr &&u8, value &int) {
 		if !(count--) {
 			break
 		}
+	}
+	// check chained dereferencing:
+	the_thing := Mobj_t{}
+	the_thing.value = 456
+	thing := &the_thing
+	link := &&Mobj_t(0)
+	thing.bnext = unsafe { *link }
+	if unsafe { *link != nil } {
+		unsafe {
+			(*link).bprev = thing
+		}
+	}
+	unsafe {
+		*link = thing
 	}
 }
