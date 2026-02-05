@@ -2541,7 +2541,7 @@ fn (mut c C2V) expr(_node &Node) string {
 			bad_node
 		}
 		c.expr(expr)
-		c.gen('{ ')
+		c.gen(' { ')
 		c.expr(case1)
 		c.gen(' } else {')
 		c.expr(case2)
