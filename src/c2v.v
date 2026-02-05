@@ -44,6 +44,11 @@ const builtin_global_names = ['sys_nerr', 'sys_errlist', 'suboptarg']
 // V built-in type names that cannot be used as struct/enum names (case-insensitive after capitalize):
 const v_builtin_type_names = ['Option', 'Result', 'Error']
 
+// V reserved function names that conflict with V builtins or cause module prefix issues:
+// - 'error' is V's built-in error function
+// - functions starting with 'builtin_' get interpreted as 'builtin__' module prefix
+const v_reserved_fn_names = ['error', 'print', 'println', 'eprintln', 'panic', 'assert']
+
 const tabs = ['', '\t', '\t\t', '\t\t\t', '\t\t\t\t', '\t\t\t\t\t', '\t\t\t\t\t\t', '\t\t\t\t\t\t\t',
 	'\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t\t\t',
 	'\t\t\t\t\t\t\t\t\t\t\t\t', '\t\t\t\t\t\t\t\t\t\t\t\t\t']
@@ -288,6 +293,16 @@ fn (mut c C2V) add_var_func_name(mut the_map map[string]string, c_string string)
 		return v
 	}
 	mut v_string := c_string.camel_to_snake().trim_left('_')
+	// Check for conflict with V reserved function names
+	if v_string in v_reserved_fn_names {
+		vprintln('${@FN}reserved conflict: ${c_string} => ${v_string}')
+		v_string = 'c_' + v_string
+	}
+	// Check for 'builtin_' prefix which V interprets as 'builtin__' module prefix
+	if v_string.starts_with('builtin_') {
+		vprintln('${@FN}builtin prefix conflict: ${c_string} => ${v_string}')
+		v_string = 'c_' + v_string
+	}
 	if v_string in the_map.values() {
 		vprintln('${@FN}dup: ${c_string} => ${v_string}')
 		v_string += '_vdup' + c.cnt.str() // renaming the variable's name, avoid duplicate
