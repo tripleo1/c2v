@@ -29,9 +29,9 @@ const builtin_fn_names = ['fopen', 'puts', 'fflush', 'getline', 'printf', 'memse
 	'memmove', 'vsnprintf', 'rintf', 'rint', 'bsearch', 'qsort', '__stdinp', '__stdoutp', '__stderrp',
 	'getenv', 'strtoul', 'strtol', 'strtod', 'strtof', '__error', 'errno', 'atol', 'atof', 'atoll',
 	'fputs', 'fputc', 'putchar', 'getchar', 'putc', 'getc', 'feof', 'ferror', 'clearerr', 'fileno',
-	'isalnum', 'isalpha', 'isdigit', 'islower', 'isupper', 'isxdigit', 'iscntrl', 'isgraph', 'isprint', 'ispunct',
-	'tolower', 'strcat', 'strncat', 'strpbrk', 'strspn', 'strcspn', 'strstr', 'strerror',
-	'sprintf', 'vsprintf', 'vfprintf', 'vprintf', '__assert_rtn', '__builtin_expect']
+	'isalnum', 'isalpha', 'isdigit', 'islower', 'isupper', 'isxdigit', 'iscntrl', 'isgraph',
+	'isprint', 'ispunct', 'tolower', 'strcat', 'strncat', 'strpbrk', 'strspn', 'strcspn', 'strstr',
+	'strerror', 'sprintf', 'vsprintf', 'vfprintf', 'vprintf', '__assert_rtn', '__builtin_expect']
 
 const c_known_fn_names = ['some_non_existant_c_fn_name']
 
@@ -178,12 +178,12 @@ mut:
 	globals             map[string]Global
 	inside_switch       int // used to be a bool, a counter to handle switches inside switches
 	inside_switch_enum  bool
-	inside_for          bool // to handle `;;++i`
-	inside_comma_expr   bool // to handle prefix ++/-- in comma expressions
-	inside_for_post     bool // to keep comma operators inline in `for` post expressions
-	inside_array_index  bool // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
-	inside_sizeof       bool // to skip unsafe blocks for pointer dereferences in sizeof
-	inside_unsafe       bool // to prevent nested unsafe blocks
+	inside_for          bool     // to handle `;;++i`
+	inside_comma_expr   bool     // to handle prefix ++/-- in comma expressions
+	inside_for_post     bool     // to keep comma operators inline in `for` post expressions
+	inside_array_index  bool     // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
+	inside_sizeof       bool     // to skip unsafe blocks for pointer dereferences in sizeof
+	inside_unsafe       bool     // to prevent nested unsafe blocks
 	pre_cond_stmts      []string // statements to output before conditions (for assignment-in-expr patterns)
 	global_struct_init  string
 	cur_out_line        string
@@ -214,7 +214,7 @@ mut:
 	has_cfile               bool
 	returning_bool          bool
 	cur_fn_ret_type         string // current function's return type
-	keep_ast                bool // do not delete ast.json after running
+	keep_ast                bool   // do not delete ast.json after running
 	last_declared_type_name string
 	can_output_comment      map[int]bool          // to avoid duplicate output comment
 	cnt                     int                   // global unique id counter
@@ -424,8 +424,8 @@ fn (mut c C2V) save() {
 	// Generate declarations for external C types
 	// Generate common C function declarations if they're used
 	mut c_fn_decls := strings.new_builder(100)
-	needs_c_fns := s.contains('C.getenv') || s.contains('C.strtoul') || s.contains('C.__error') ||
-	               s.contains('C.qsort') || s.contains('C.__builtin_expect') || s.contains('C.__assert_rtn')
+	needs_c_fns := s.contains('C.getenv') || s.contains('C.strtoul') || s.contains('C.__error')
+		|| s.contains('C.qsort') || s.contains('C.__builtin_expect') || s.contains('C.__assert_rtn')
 	if needs_c_fns {
 		c_fn_decls.write_string('\n// Common C function declarations\n')
 		if s.contains('C.getenv') {
@@ -881,11 +881,11 @@ fn convert_type(typ_ string) Type {
 	if is_const {
 	}
 	typ = typ.replace('const ', '')
-	typ = typ.replace(' const', '')     // Handle "char * const" cases (const pointer with space)
-	typ = typ.replace('*const', '*')    // Handle "char *const" cases (const pointer without space)
+	typ = typ.replace(' const', '') // Handle "char * const" cases (const pointer with space)
+	typ = typ.replace('*const', '*') // Handle "char *const" cases (const pointer without space)
 	typ = typ.replace('volatile ', '')
-	typ = typ.replace(' volatile', '')  // Handle "FILE *volatile" cases
-	typ = typ.replace('volatile', '')   // Handle any remaining volatile
+	typ = typ.replace(' volatile', '') // Handle "FILE *volatile" cases
+	typ = typ.replace('volatile', '') // Handle any remaining volatile
 	typ = typ.replace('std::', '')
 	if typ.trim_space() == 'char **' {
 		return Type{
@@ -1977,7 +1977,8 @@ fn (mut c C2V) var_decl(mut decl_stmt Node) {
 					// Check if this is a type alias to a primitive type
 					// V doesn't allow TypeAlias{} for primitive type aliases, use TypeAlias(0) instead
 					underlying := c.resolve_type_alias(typ)
-					if underlying in ['u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'int', 'i64', 'f32', 'f64', 'usize', 'isize', 'bool'] {
+					if underlying in ['u8', 'u16', 'u32', 'u64', 'i8', 'i16', 'int', 'i64', 'f32',
+						'f64', 'usize', 'isize', 'bool'] {
 						def = '${typ}(0)'
 					} else {
 						def = '${typ}{}'
@@ -2225,7 +2226,8 @@ fn (mut c C2V) expr(_node &Node) string {
 		if first_expr.kindof(.paren_expr) && first_expr.inner.len > 0 {
 			deref_expr = first_expr.inner[0]
 		}
-		mut is_deref_assign := op == '=' && deref_expr.kindof(.unary_operator) && deref_expr.opcode == '*'
+		mut is_deref_assign := op == '=' && deref_expr.kindof(.unary_operator)
+			&& deref_expr.opcode == '*'
 		mut deref_func_call := false
 		if is_deref_assign {
 			// Get the pointer expression without the dereference wrapper
@@ -2234,7 +2236,8 @@ fn (mut c C2V) expr(_node &Node) string {
 				bad_node
 			}
 			// Check if we're dereferencing a function call - V doesn't allow this on the left side
-			if ptr_expr.kindof(.call_expr) || (ptr_expr.kindof(.implicit_cast_expr) && ptr_expr.inner.len > 0 && ptr_expr.inner[0].kindof(.call_expr)) {
+			if ptr_expr.kindof(.call_expr) || (ptr_expr.kindof(.implicit_cast_expr)
+				&& ptr_expr.inner.len > 0 && ptr_expr.inner[0].kindof(.call_expr)) {
 				// Generate a temporary variable for the function result
 				deref_func_call = true
 				c.genln('{')
@@ -2252,23 +2255,24 @@ fn (mut c C2V) expr(_node &Node) string {
 			}
 		} else {
 			c.expr(first_expr)
-			}
-			if op == ',' {
-				if c.inside_for_post {
-					// Keep comma-separated updates in `for` post expressions.
-					c.gen(', ')
-				} else {
-					// Convert C comma operator to separate statements.
-					c.genln('')
-				}
+		}
+		if op == ',' {
+			if c.inside_for_post {
+				// Keep comma-separated updates in `for` post expressions.
+				c.gen(', ')
 			} else {
-				c.gen(' ${op} ')
+				// Convert C comma operator to separate statements.
+				c.genln('')
 			}
+		} else {
+			c.gen(' ${op} ')
+		}
 		mut second_expr := node.try_get_next_child() or {
 			println(add_place_data_to_error(err))
 			bad_node
 		}
-		if op == '=' && second_expr.kindof(.binary_operator) && second_expr.opcode == '=' && !c.inside_for {
+		if op == '=' && second_expr.kindof(.binary_operator) && second_expr.opcode == '='
+			&& !c.inside_for {
 			// handle `a = b = c` => `a = c; b = c;` (skip in for loop init)
 			second_child_expr := second_expr.try_get_next_child() or {
 				println(add_place_data_to_error(err))
@@ -2576,7 +2580,8 @@ fn (mut c C2V) expr(_node &Node) string {
 		}
 		// Special case: casting 0 to a pointer type should generate voidptr(0)
 		// to avoid V's "cannot dereference nil pointer" errors
-		if expr.kindof(.integer_literal) && expr.value.to_str() == '0' && (cast.starts_with('&') || cast == 'voidptr') {
+		if expr.kindof(.integer_literal) && expr.value.to_str() == '0'
+			&& (cast.starts_with('&') || cast == 'voidptr') {
 			c.gen('voidptr(0)')
 			return ''
 		}
@@ -2639,7 +2644,7 @@ fn (mut c C2V) expr(_node &Node) string {
 		vprintln(node.str())
 	} else if node.kindof(.predefined_expr) {
 		v_predefined := match node.name {
-			'__FUNCTION__', '__func__' { '@FN.str' }  // .str for C compatibility
+			'__FUNCTION__', '__func__' { '@FN.str' } // .str for C compatibility
 			'__line__' { '@LINE' }
 			'__file__' { '@FILE' }
 			else { '' }
