@@ -223,6 +223,7 @@ mut:
 	seen_ids                map[string]&Node
 	generated_declarations  map[string]bool // prevent duplicate generations
 	external_types          map[string]bool // external C types that need declarations
+	known_types             map[string]bool // all type names that will be defined in this translation unit (pre-scanned)
 }
 
 fn empty_toml_doc() toml.Doc {
@@ -394,6 +395,10 @@ fn (mut c C2V) prefix_external_type(type_name string) string {
 		if v_name == base {
 			return type_name // Type is defined as enum, no prefix needed
 		}
+	}
+	// Check if this type will be defined later in this translation unit
+	if base in c.known_types {
+		return type_name
 	}
 	// Type is external - prefix with C.
 	// Track this external type for declaration generation
@@ -3104,6 +3109,28 @@ fn (mut c2v C2V) translate_file(path string) {
 		}
 		if mut pnode := c2v.seen_ids[node.previous_declaration] {
 			pnode.redeclarations_count++
+		}
+	}
+
+	// Pre-scan pass: collect all type names that will be defined in this translation unit.
+	// This prevents types from being incorrectly marked as external when they appear
+	// before their definition in the AST ordering (e.g., mobj_t referencing subsector_t
+	// when subsector_t's definition appears later in the AST).
+	c2v.known_types = {}
+	for i, node in c2v.tree.inner {
+		if node.kindof(.record_decl) && node.inner.len > 0 {
+			mut c_name := node.name
+			if c2v.tree.inner.len > i + 1 {
+				next_node := c2v.tree.inner[i + 1]
+				if next_node.kind == .typedef_decl {
+					c_name = next_node.name
+				}
+			}
+			if c_name != '' && c_name !in builtin_type_names {
+				c2v.known_types[c_name.trim_left('_').capitalize()] = true
+			}
+		} else if node.kindof(.enum_decl) && node.name != '' {
+			c2v.known_types[node.name.trim_left('_').capitalize()] = true
 		}
 	}
 

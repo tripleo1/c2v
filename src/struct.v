@@ -249,6 +249,8 @@ fn (mut c C2V) generate_named_enum_for_anon(node &Node, struct_name string, fiel
 	c.genln('}')
 	c.genln('')
 
+	// Register the generated enum so prefix_external_type recognizes it
+	c.enums[enum_name] = enum_name
 	return enum_name
 }
 

@@ -4,5 +4,7 @@ module main
 type Fn_with_void_pp = fn (voidptr, &voidptr) int
 
 fn test_fn(ptr &voidptr) {
-	*ptr = 0
+	unsafe {
+		*ptr = 0
+	}
 }
