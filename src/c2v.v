@@ -2561,6 +2561,12 @@ fn (mut c C2V) expr(_node &Node) string {
 			c.gen('{}')
 			return ''
 		}
+		// Special case: casting 0 to a pointer type should generate voidptr(0)
+		// to avoid V's "cannot dereference nil pointer" errors
+		if expr.kindof(.integer_literal) && expr.value.to_str() == '0' && (cast.starts_with('&') || cast == 'voidptr') {
+			c.gen('voidptr(0)')
+			return ''
+		}
 		if cast.contains('*') {
 			cast = '(${cast})'
 		}
