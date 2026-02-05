@@ -181,6 +181,7 @@ mut:
 	inside_for          bool // to handle `;;++i`
 	inside_comma_expr   bool // to handle prefix ++/-- in comma expressions
 	inside_array_index  bool // for enums used as int array index: `if player.weaponowned[.wp_chaingun]`
+	inside_sizeof       bool // to skip unsafe blocks for pointer dereferences in sizeof
 	pre_cond_stmts      []string // statements to output before conditions (for assignment-in-expr patterns)
 	global_struct_init  string
 	cur_out_line        string
@@ -2307,10 +2308,16 @@ fn (mut c C2V) expr(_node &Node) string {
 			c.expr(expr)
 		} else if op == '*' {
 			// Pointer dereference - wrap in unsafe block for V
-			// Use parentheses to ensure proper operator precedence
-			c.gen('(unsafe { *')
-			c.expr(expr)
-			c.gen(' })')
+			// Exception: inside sizeof, we don't need unsafe since sizeof doesn't evaluate its operand
+			if c.inside_sizeof {
+				c.gen('*')
+				c.expr(expr)
+			} else {
+				// Use parentheses to ensure proper operator precedence
+				c.gen('(unsafe { *')
+				c.expr(expr)
+				c.gen(' })')
+			}
 		}
 	}
 	// ()
@@ -2448,7 +2455,9 @@ fn (mut c C2V) expr(_node &Node) string {
 			if needs_parens {
 				c.gen('(')
 			}
+			c.inside_sizeof = true
 			c.expr(expr)
+			c.inside_sizeof = false
 			if needs_parens {
 				c.gen(')')
 			}
