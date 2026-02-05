@@ -798,22 +798,25 @@ fn (mut c C2V) fn_decl(mut node Node, gen_types string) {
 			c.genln(')\n}')
 		}
 	} else {
-		v_name := c.fns[c_name]
-		if v_name != c_name {
-			// This fixes unknown symbols errors when building separate .c => .v files into .o files
-			// example:
-			//
-			// @[c: 'P_TryMove']
-			// fn p_trymove(thing &Mobj_t, x int, y int) bool
-			//
-			// Now every time `p_trymove` is called, `P_TryMove` will be generated instead.
-			c.genln("@[c:'${c_name}']")
-		}
-		if c_name in c_known_fn_names {
-			c.genln('fn C.${c_name}(${str_args})${typ}')
-			c.add_var_func_name(mut c.extern_fns, c_name)
-		} else {
-			c.genln('fn ${v_name}(${str_args})${typ}')
+		if c_name !in ['__builtin___memset_chk', '__builtin_object_size', '__builtin___memmove_chk',
+			'__builtin___memcpy_chk'] {
+			v_name := c.fns[c_name]
+			if v_name != c_name {
+				// This fixes unknown symbols errors when building separate .c => .v files into .o files
+				// example:
+				//
+				// @[c: 'P_TryMove']
+				// fn p_trymove(thing &Mobj_t, x int, y int) bool
+				//
+				// Now every time `p_trymove` is called, `P_TryMove` will be generated instead.
+				c.genln("@[c:'${c_name}']")
+			}
+			if c_name in c_known_fn_names {
+				c.genln('fn C.${c_name}(${str_args})${typ}')
+				c.add_var_func_name(mut c.extern_fns, c_name)
+			} else {
+				c.genln('fn ${v_name}(${str_args})${typ}')
+			}
 		}
 	}
 	c.genln('')
