@@ -5,13 +5,12 @@ typedef unsigned int uint32;
 typedef uint32 myint;
 typedef myint deepint;
 
-void use_types(uint32 a, myint b, deepint c) {
-}
+void use_types(uint32 a, myint b, deepint c) {}
 
 int main() {
-    uint32 x = 1;
-    myint y = 2;
-    deepint z = 3;
-    use_types(x, y, z);
-    return 0;
+  uint32 x = 1;
+  myint y = 2;
+  deepint z = 3;
+  use_types(x, y, z);
+  return 0;
 }

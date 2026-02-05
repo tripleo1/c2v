@@ -1,7 +1,3 @@
 #include <stdbool.h>
 
-bool foo(int value)
-{
-    return value == 2;
-}
-
+bool foo(int value) { return value == 2; }

@@ -1,6 +1,6 @@
-#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 // standard types should be lower-cased
 typedef unsigned short v_u16;
@@ -10,15 +10,14 @@ typedef void *v_voidptr;
 typedef bool v_bool;
 
 // disabled for macOS/Linux compatibility
-//#include <stddef.h>
-//typedef ptrdiff_t v_isize;
+// #include <stddef.h>
+// typedef ptrdiff_t v_isize;
 
 // not sure how this is supposed to work
 typedef intptr_t c_intptr_t;
 
-int main()
-{
-    void *pointers[8];
+int main() {
+  void *pointers[8];
 
-    return 0;
+  return 0;
 }

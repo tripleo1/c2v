@@ -5,9 +5,7 @@
 extern const char *extern_array[];
 
 struct Foo {
-    int x;
+  int x;
 };
 
-void use_foo(struct Foo *f) {
-    f->x = 1;
-}
+void use_foo(struct Foo *f) { f->x = 1; }

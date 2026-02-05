@@ -1,3 +1,1 @@
-int main() {
-int n, r, sum = 0, temp;
-}
+int main() { int n, r, sum = 0, temp; }

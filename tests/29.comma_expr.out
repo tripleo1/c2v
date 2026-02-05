@@ -6,7 +6,8 @@ module main
 fn test_comma_expr() {
 	x := 0
 	y := 0
-	// Comma with prefix operators - the original bug was --$ and ++$ in comma exprs
+	// Comma with prefix operators - the original bug was --$ and ++$ in comma
+	// exprs
 	x--
 	y++
 	// Compound assignment in parens (should not have parens in V)

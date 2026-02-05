@@ -2,22 +2,23 @@
 // C comma operator should be converted to separate statements in V
 
 void test_comma_expr() {
-    int x = 0;
-    int y = 0;
+  int x = 0;
+  int y = 0;
 
-    // Comma with prefix operators - the original bug was --$ and ++$ in comma exprs
-    (--x, ++y);
+  // Comma with prefix operators - the original bug was --$ and ++$ in comma
+  // exprs
+  (--x, ++y);
 
-    // Compound assignment in parens (should not have parens in V)
-    (x |= 1);
-    (y &= 2);
+  // Compound assignment in parens (should not have parens in V)
+  (x |= 1);
+  (y &= 2);
 }
 
 // Test case similar to khash.h kroundup32 macro
 void test_kroundup32() {
-    unsigned int n = 100;
+  unsigned int n = 100;
 
-    // This pattern from khash.h caused the original bug
-    // Prefix decrement, bitwise ORs, prefix increment - all in comma expression
-    (--n, n |= n >> 1, n |= n >> 2, n |= n >> 4, n |= n >> 8, n |= n >> 16, ++n);
+  // This pattern from khash.h caused the original bug
+  // Prefix decrement, bitwise ORs, prefix increment - all in comma expression
+  (--n, n |= n >> 1, n |= n >> 2, n |= n >> 4, n |= n >> 8, n |= n >> 16, ++n);
 }

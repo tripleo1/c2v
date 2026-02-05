@@ -4,27 +4,27 @@
 // outputting broken "Union (unnamed union at ...)" strings.
 
 struct with_anon_union {
-    int type;
-    union {
-        int i;
-        float f;
-    } value;
+  int type;
+  union {
+    int i;
+    float f;
+  } value;
 };
 
 struct with_anon_struct {
-    int id;
-    struct {
-        int x;
-        int y;
-    } point;
+  int id;
+  struct {
+    int x;
+    int y;
+  } point;
 };
 
 struct nested_anon {
-    union {
-        struct {
-            int left;
-            int right;
-        } binary;
-        int unary;
-    } u;
+  union {
+    struct {
+      int left;
+      int right;
+    } binary;
+    int unary;
+  } u;
 };

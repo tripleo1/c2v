@@ -5,15 +5,14 @@
 struct external_item;
 
 struct my_container {
-    struct external_item *item;
-    int count;
+  struct external_item *item;
+  int count;
 };
 
-void process_item(struct external_item *item) {
-}
+void process_item(struct external_item *item) {}
 
 int main() {
-    struct my_container c;
-    c.count = 0;
-    return 0;
+  struct my_container c;
+  c.count = 0;
+  return 0;
 }

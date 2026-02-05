@@ -3,7 +3,8 @@ module main
 
 // Test struct pointer type conversion
 // Types like 'struct foo_struct *' should convert to '&Foo_struct'
-// Bug: 'struct ' was being replaced globally, so 'diff_queue_struct *' became 'diff_queue_*'
+// Bug: 'struct ' was being replaced globally, so 'diff_queue_struct *' became
+// 'diff_queue_*'
 struct My_queue_struct {
 	value int
 }

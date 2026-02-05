@@ -4,21 +4,21 @@
 #include <stdlib.h>
 
 struct Point {
-    int x;
-    int y;
+  int x;
+  int y;
 };
 
 int main() {
-    struct Point *ptr;
-    int size1 = sizeof(*ptr);
+  struct Point *ptr;
+  int size1 = sizeof(*ptr);
 
-    int **ptr2;
-    int size2 = sizeof(*ptr2);
+  int **ptr2;
+  int size2 = sizeof(*ptr2);
 
-    // Allocate using the computed size
-    struct Point *p = malloc(size1);
+  // Allocate using the computed size
+  struct Point *p = malloc(size1);
 
-    free(p);
+  free(p);
 
-    return 0;
+  return 0;
 }
